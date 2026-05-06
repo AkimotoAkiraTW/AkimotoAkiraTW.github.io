@@ -18,6 +18,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
+import { ToolLayoutComponent } from '../tool-layout.component';
 
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
 
@@ -45,6 +46,13 @@ interface DiscountGroupConfig {
   waivedCups: number;
 }
 
+interface ParsedOrderSummary {
+  uuid: string;
+  storeName: string;
+  status: string;
+  jsonTotal: number;
+}
+
 type SplitMethod = 'proportional' | 'flat';
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -55,233 +63,300 @@ type SplitMethod = 'proportional' | 'flat';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
-    RouterLink,
     MatButtonModule,
     MatIconModule,
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatCheckboxModule,
-    MatSnackBarModule,
     MatTooltipModule,
     MatChipsModule,
     MatDividerModule,
+    ToolLayoutComponent,
   ],
   template: `
-    <div class="content-container tool-page">
-
-      <!-- 返回 -->
-      <a mat-button routerLink="/tools" class="back-link">
-        <mat-icon>arrow_back</mat-icon> 回工具箱
-      </a>
-
-      <header class="tool-header">
-        <h1>Uber Eats 團購對帳工具</h1>
-        <p class="subtitle">貼入訂單 JSON，自動計算各成員應付金額，支援公平折扣平攤與差價隔離。</p>
-      </header>
-
-      <!-- JSON 輸入面板 -->
-      <mat-card appearance="outlined" class="input-card">
-        <mat-card-header>
-          <mat-icon mat-card-avatar>upload_file</mat-icon>
-          <mat-card-title>貼入訂單 JSON</mat-card-title>
-          <mat-card-subtitle>
-            從瀏覽器開發者工具 Network 頁籤找到 <code>getActiveOrdersV1</code> 請求，複製 Response 內容貼入。
-          </mat-card-subtitle>
-        </mat-card-header>
-        <mat-card-content>
-          <mat-form-field appearance="outline" class="full-width json-field">
-            <mat-label>getActiveOrdersV1 Response JSON</mat-label>
-            <textarea
-              matInput
-              [(ngModel)]="rawJson"
-              rows="7"
-              placeholder='{ "data": { "orders": [...] } }'
-              spellcheck="false"
-            ></textarea>
-          </mat-form-field>
-
-          @if (parseError()) {
-            <p class="error-hint">
-              <mat-icon inline>error_outline</mat-icon>
-              {{ parseError() }}
-            </p>
-          }
-        </mat-card-content>
-        <mat-card-actions align="end">
-          <button mat-button (click)="clearAll()">
-            <mat-icon>clear</mat-icon> 清除全部
-          </button>
-          <button mat-stroked-button (click)="parseJson(true)" [disabled]="!rawJson">
-            <mat-icon>add</mat-icon> 累積解析
-          </button>
-          <button mat-raised-button color="primary" (click)="parseJson(false)" [disabled]="!rawJson">
-            <mat-icon>auto_fix_high</mat-icon> 全新解析
-          </button>
-        </mat-card-actions>
-      </mat-card>
-
-      <!-- 結果區塊 -->
-      @if (orderItems().length > 0) {
-        <!-- 店家資訊 & 狀態 -->
-        <div class="store-header">
-          <span class="store-name">{{ storeName() }}</span>
-          @if (orderStatus()) {
-            <mat-chip [disableRipple]="true">{{ orderStatus() }}</mat-chip>
-          }
-        </div>
-
-        <!-- 分攤設定 -->
-        <mat-card appearance="outlined" class="config-card">
+    <app-tool-layout 
+      title="Uber Eats 團購對帳工具" 
+      description="貼入訂單 JSON，自動計算各成員應付金額，支援公平折扣平攤與差價隔離。">
+      
+      <div class="tool-page-content">
+        <!-- JSON 輸入面板 -->
+        <mat-card appearance="outlined" class="input-card">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>upload_file</mat-icon>
+            <mat-card-title>貼入訂單 JSON</mat-card-title>
+            <mat-card-subtitle>
+              從瀏覽器開發者工具 Network 頁籤找到 <code>getActiveOrdersV1</code> 請求，複製 Response 內容貼入。
+            </mat-card-subtitle>
+          </mat-card-header>
           <mat-card-content>
-            <div class="config-row">
-              <mat-form-field appearance="outline" class="config-field">
-                <mat-label>全單折扣 ($)</mat-label>
-                <input matInput type="number" [(ngModel)]="globalDiscount" (ngModelChange)="recalculate()" min="0">
-                <mat-icon matPrefix>local_offer</mat-icon>
-              </mat-form-field>
+            <mat-form-field appearance="outline" class="full-width json-field">
+              <mat-label>getActiveOrdersV1 Response JSON</mat-label>
+              <textarea
+                matInput
+                [(ngModel)]="rawJson"
+                rows="7"
+                placeholder='{ "data": { "orders": [...] } }'
+                spellcheck="false"
+              ></textarea>
+            </mat-form-field>
 
-              <mat-form-field appearance="outline" class="config-field">
-                <mat-label>運費 / 雜費 ($)</mat-label>
-                <input matInput type="number" [(ngModel)]="deliveryFee" (ngModelChange)="recalculate()" min="0">
-                <mat-icon matPrefix>delivery_dining</mat-icon>
-              </mat-form-field>
-
-              <mat-form-field appearance="outline" class="config-field">
-                <mat-label>分攤方式</mat-label>
-                <mat-select [(ngModel)]="splitMethod" (ngModelChange)="recalculate()">
-                  <mat-option value="proportional">按金額比例</mat-option>
-                  <mat-option value="flat">按人頭平攤</mat-option>
-                </mat-select>
-                <mat-icon matPrefix>calculate</mat-icon>
-              </mat-form-field>
-            </div>
+            @if (parseError()) {
+              <p class="error-hint">
+                <mat-icon inline>error_outline</mat-icon>
+                {{ parseError() }}
+              </p>
+            }
           </mat-card-content>
+          <mat-card-actions align="end">
+            <button mat-button (click)="clearAll()">
+              <mat-icon>clear</mat-icon> 清除全部
+            </button>
+            <button mat-stroked-button (click)="parseJson(true)" [disabled]="!rawJson">
+              <mat-icon>add</mat-icon> 累積解析
+            </button>
+            <button mat-raised-button color="primary" (click)="parseJson(false)" [disabled]="!rawJson">
+              <mat-icon>auto_fix_high</mat-icon> 全新解析
+            </button>
+          </mat-card-actions>
         </mat-card>
 
-        <!-- 群組折扣設定 (僅在有群組被選用時顯示) -->
-        @if (activeGroups().length > 0) {
-          <mat-card appearance="outlined" class="group-card">
-            <mat-card-header>
-              <mat-icon mat-card-avatar>group_work</mat-icon>
-              <mat-card-title>進階群組折扣 (均分模式)</mat-card-title>
-              <mat-card-subtitle>
-                適用於「買一送一」、「滿千折百」等複雜折扣。群組總折扣將依底價比例均攤給群組成員。
-              </mat-card-subtitle>
-            </mat-card-header>
-            <mat-card-content>
-              <div class="group-configs">
-                @for (groupId of activeGroups(); track groupId) {
-                  <div class="group-row">
-                    <div class="group-info">
-                      <span class="group-badge">{{ groupId }}</span>
-                      <span class="group-stats">
-                        (共 {{ getGroupItemCount(groupId) }} 份, 
-                        總底價: {{ fmt(getGroupBasePriceTotal(groupId)) }}, 
-                        已知折扣: {{ fmt(getGroupExplicitDiscount(groupId)) }})
-                      </span>
-                    </div>
-                    <div class="group-action">
-                      <mat-form-field appearance="outline" class="group-discount-field">
-                        <mat-label>免除杯數 (BOGO)</mat-label>
-                        <input matInput type="number" 
-                               [ngModel]="getGroupWaivedCups(groupId)" 
-                               (ngModelChange)="updateGroupWaivedCups(groupId, $event)" 
-                               min="0" step="1">
-                        <mat-icon matPrefix>local_cafe</mat-icon>
-                      </mat-form-field>
-                      <mat-form-field appearance="outline" class="group-discount-field">
-                        <mat-label>額外滿減折扣 ($)</mat-label>
-                        <input matInput type="number" 
-                               [ngModel]="getGroupManualDiscount(groupId)" 
-                               (ngModelChange)="updateGroupDiscount(groupId, $event)" 
-                               min="0">
-                        <mat-icon matPrefix>money_off</mat-icon>
-                      </mat-form-field>
-                    </div>
+        <!-- 結果區塊 -->
+        @if (orderItems().length > 0) {
+          <!-- 店家資訊 & 狀態 -->
+          <div class="store-header">
+            <div class="header-actions">
+              <div class="store-items">
+                @for (order of parsedOrders(); track order.uuid) {
+                  <div class="store-item">
+                    <span class="store-name">{{ order.storeName }}</span>
+                    @if (order.status) {
+                      <mat-chip [disableRipple]="true">{{ order.status }}</mat-chip>
+                    }
                   </div>
                 }
               </div>
+              
+              <div class="view-toggle">
+                <button mat-icon-button [color]="viewMode() === 'table' ? 'primary' : ''" (click)="viewMode.set('table')" matTooltip="表格模式">
+                  <mat-icon>table_rows</mat-icon>
+                </button>
+                <button mat-icon-button [color]="viewMode() === 'card' ? 'primary' : ''" (click)="viewMode.set('card')" matTooltip="卡片模式">
+                  <mat-icon>grid_view</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分攤設定 -->
+          <mat-card appearance="outlined" class="config-card">
+            <mat-card-content>
+              <div class="config-row">
+                <mat-form-field appearance="outline" class="config-field">
+                  <mat-label>全單折扣 ($)</mat-label>
+                  <input matInput type="number" [(ngModel)]="globalDiscount" (ngModelChange)="recalculate()" min="0">
+                  <mat-icon matPrefix>local_offer</mat-icon>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="config-field">
+                  <mat-label>運費 / 雜費 ($)</mat-label>
+                  <input matInput type="number" [(ngModel)]="deliveryFee" (ngModelChange)="recalculate()" min="0">
+                  <mat-icon matPrefix>delivery_dining</mat-icon>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="config-field">
+                  <mat-label>分攤方式</mat-label>
+                  <mat-select [(ngModel)]="splitMethod" (ngModelChange)="recalculate()">
+                    <mat-option value="proportional">按金額比例</mat-option>
+                    <mat-option value="flat">按人頭平攤</mat-option>
+                  </mat-select>
+                  <mat-icon matPrefix>calculate</mat-icon>
+                </mat-form-field>
+              </div>
             </mat-card-content>
           </mat-card>
-        }
 
-        <!-- 統計卡片 -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-label">品項原價加總</span>
-            <span class="stat-value">{{ fmt(stats().itemSum) }}</span>
-          </div>
-          <div class="stat-card accent">
-            <span class="stat-label">JSON 實付總額</span>
-            <span class="stat-value positive">{{ fmt(stats().jsonTotal) }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">差距（待分配）</span>
-            <span class="stat-value" [class.negative]="stats().discrepancy !== 0">
-              {{ fmt(stats().discrepancy) }}
-            </span>
-          </div>
-          <div class="stat-card highlight">
-            <span class="stat-label">當前對帳總和</span>
-            <span class="stat-value primary">{{ fmt(stats().checkSum) }}</span>
-          </div>
-        </div>
+          <!-- 群組折扣設定 (僅在有群組被選用時顯示) -->
+          @if (activeGroups().length > 0) {
+            <mat-card appearance="outlined" class="group-card">
+              <mat-card-header>
+                <mat-icon mat-card-avatar>group_work</mat-icon>
+                <mat-card-title>進階群組折扣 (均分模式)</mat-card-title>
+                <mat-card-subtitle>
+                  適用於「買一送一」、「滿千折百」等複雜折扣。群組總折扣將依底價比例均攤給群組成員。
+                </mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="group-configs">
+                  @for (groupId of activeGroups(); track groupId) {
+                    <div class="group-row">
+                      <div class="group-info">
+                        <span class="group-badge">{{ groupId }}</span>
+                        <span class="group-stats">
+                          (共 {{ getGroupItemCount(groupId) }} 份, 
+                          總底價: {{ fmt(getGroupBasePriceTotal(groupId)) }}, 
+                          已知折扣: {{ fmt(getGroupExplicitDiscount(groupId)) }})
+                        </span>
+                      </div>
+                      <div class="group-action">
+                        <mat-form-field appearance="outline" class="group-discount-field">
+                          <mat-label>免除杯數 (BOGO)</mat-label>
+                          <input matInput type="number" 
+                                 [ngModel]="getGroupWaivedCups(groupId)" 
+                                 (ngModelChange)="updateGroupWaivedCups(groupId, $event)" 
+                                 min="0" step="1">
+                          <mat-icon matPrefix>local_cafe</mat-icon>
+                        </mat-form-field>
+                        <mat-form-field appearance="outline" class="group-discount-field">
+                          <mat-label>額外滿減折扣 ($)</mat-label>
+                          <input matInput type="number" 
+                                 [ngModel]="getGroupManualDiscount(groupId)" 
+                                 (ngModelChange)="updateGroupDiscount(groupId, $event)" 
+                                 min="0">
+                          <mat-icon matPrefix>money_off</mat-icon>
+                        </mat-form-field>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </mat-card-content>
+            </mat-card>
+          }
 
-        <!-- 餘額警告 -->
-        @if (showBalanceWarning()) {
-          <div class="balance-warning">
-            <mat-icon>warning_amber</mat-icon>
-            計算總和 ({{ fmt(stats().checkSum) }}) 與實付 ({{ fmt(stats().jsonTotal) }}) 尚有差距，請調整折扣或運費。
+          <!-- 數據統計 -->
+          <div class="stats-row">
+            <div class="stat-card accent">
+              <span class="stat-label">JSON 實付總額</span>
+              <span class="stat-value positive">{{ fmt(stats().jsonTotal) }}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">差距（待分配）</span>
+              <span class="stat-value" [class.negative]="stats().discrepancy !== 0">
+                {{ fmt(stats().discrepancy) }}
+              </span>
+            </div>
+            <div class="stat-card highlight">
+              <span class="stat-label">當前對帳總和</span>
+              <span class="stat-value primary">{{ fmt(stats().checkSum) }}</span>
+            </div>
           </div>
-        }
 
-        <!-- 訂單明細表 -->
-        <mat-card appearance="outlined" class="table-card">
-          <mat-card-content>
-            <div class="table-wrapper">
-              <table class="order-table">
-                <thead>
-                  <tr>
-                    <th>店家/訂購人</th>
-                    <th>品項</th>
-                    <th class="center">數量</th>
-                    <th class="right">原價</th>
-                    <th class="right">加項費</th>
-                    <th class="center" matTooltip="將多個品項設定為同群組，即可共享該群組的總折扣">
-                      折扣群組 <mat-icon inline class="help-icon">help_outline</mat-icon>
-                    </th>
-                    <th class="right">應付金額</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (item of orderItems(); track $index) {
-                    <tr>
-                      <td class="buyer-cell">
-                        <div class="store-tag">{{ item.storeName }}</div>
-                        {{ item.buyer }}
-                      </td>
-                      <td>
-                        <div class="item-name-group">
-                          <span class="item-title">{{ item.itemName }}</span>
-                        </div>
-                        @if (item.explicitDiscount > 0) {
-                          <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
-                        }
-                      </td>
-                      <td class="center">{{ item.quantity }}</td>
-                      <td class="right">{{ fmt(item.price) }}</td>
-                      <td class="right customization-cell">
+          <!-- 餘額警告 -->
+          @if (showBalanceWarning()) {
+            <div class="balance-warning">
+              <mat-icon>warning_amber</mat-icon>
+              計算總和 ({{ fmt(stats().checkSum) }}) 與實付 ({{ fmt(stats().jsonTotal) }}) 尚有差距，請調整折扣或運費。
+            </div>
+          }
+
+          <!-- 訂單明細表 -->
+          @if (viewMode() === 'table') {
+            <mat-card appearance="outlined" class="table-card">
+              <mat-card-content>
+                <div class="table-wrapper">
+                  <table class="order-table">
+                    <thead>
+                      <tr>
+                        <th>店家/訂購人</th>
+                        <th>品項</th>
+                        <th class="center">數量</th>
+                        <th class="right">原價</th>
+                        <th class="right">加項費</th>
+                        <th class="center" matTooltip="將多個品項設定為同群組，即可共享該群組的總折扣">
+                          折扣群組 <mat-icon inline class="help-icon">help_outline</mat-icon>
+                        </th>
+                        <th class="right">應付金額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of orderItems(); track $index) {
+                        <tr>
+                          <td class="buyer-cell">
+                            <div class="store-tag">{{ item.storeName }}</div>
+                            {{ item.buyer }}
+                          </td>
+                          <td>
+                            <div class="item-name-group">
+                              <span class="item-title">{{ item.itemName }}</span>
+                            </div>
+                            @if (item.explicitDiscount > 0) {
+                              <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
+                            }
+                          </td>
+                          <td class="center">{{ item.quantity }}</td>
+                          <td class="right">{{ fmt(item.price) }}</td>
+                          <td class="right customization-cell">
+                            <input
+                              type="number"
+                              class="inline-input"
+                              [(ngModel)]="item.customizationPrice"
+                              (ngModelChange)="recalculate()"
+                              min="0"
+                            />
+                          </td>
+                          <td class="center">
+                            <select class="group-select" 
+                                    [ngModel]="item.discountGroup" 
+                                    (ngModelChange)="updateItemOption($index, 'discountGroup', $event)">
+                              <option [ngValue]="null">無</option>
+                              @for (g of availableGroups; track g) {
+                                <option [ngValue]="g">{{ g }}</option>
+                              }
+                            </select>
+                          </td>
+                          <td class="right payable">
+                            {{ fmt(item.finalPayable) }}
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </mat-card-content>
+              <mat-divider></mat-divider>
+              <mat-card-actions align="end">
+                <button mat-stroked-button (click)="exportCsv()">
+                  <mat-icon>download</mat-icon> 匯出 CSV
+                </button>
+              </mat-card-actions>
+            </mat-card>
+          } @else {
+            <!-- 卡片模式 -->
+            <div class="card-grid">
+              @for (item of orderItems(); track $index) {
+                <mat-card appearance="outlined" class="item-card">
+                  <div class="item-card-header">
+                    <div class="item-card-buyer">
+                      <span class="store-tag">{{ item.storeName }}</span>
+                      {{ item.buyer }}
+                    </div>
+                    <div class="item-card-payable">{{ fmt(item.finalPayable) }}</div>
+                  </div>
+                  <div class="item-card-content">
+                    <div class="item-card-title">
+                      {{ item.itemName }}
+                      @if (item.explicitDiscount > 0) {
+                        <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
+                      }
+                    </div>
+                    <div class="item-card-details">
+                      <span>數量: {{ item.quantity }}</span>
+                      <span>原價: {{ fmt(item.price) }}</span>
+                    </div>
+                    <div class="item-card-actions">
+                      <div>
+                        <span class="card-input-label">加項費 ($)</span>
                         <input
                           type="number"
                           class="inline-input"
+                          style="width: 80px;"
                           [(ngModel)]="item.customizationPrice"
                           (ngModelChange)="recalculate()"
                           min="0"
                         />
-                      </td>
-                      <td class="center">
+                      </div>
+                      <div>
+                        <span class="card-input-label">折扣群組</span>
                         <select class="group-select" 
                                 [ngModel]="item.discountGroup" 
                                 (ngModelChange)="updateItemOption($index, 'discountGroup', $event)">
@@ -290,39 +365,35 @@ type SplitMethod = 'proportional' | 'flat';
                             <option [ngValue]="g">{{ g }}</option>
                           }
                         </select>
-                      </td>
-                      <td class="right payable">
-                        {{ fmt(item.finalPayable) }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                </mat-card>
+              }
             </div>
-          </mat-card-content>
-          <mat-divider></mat-divider>
-          <mat-card-actions align="end">
-            <button mat-stroked-button (click)="exportCsv()">
-              <mat-icon>download</mat-icon> 匯出 CSV
-            </button>
-          </mat-card-actions>
-        </mat-card>
-      }
-    </div>
+            <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+              <button mat-raised-button color="primary" (click)="exportCsv()">
+                <mat-icon>download</mat-icon> 匯出 CSV
+              </button>
+            </div>
+          }
+        }
+      </div>
+    </app-tool-layout>
   `,
   styles: [`
-    .tool-page { padding-top: 24px; padding-bottom: 60px; }
-    .back-link { display: inline-flex; margin-bottom: 16px; }
-    .tool-header { margin-bottom: 24px; }
-    .tool-header h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 600; margin-bottom: 6px; }
-    .subtitle { opacity: 0.6; font-size: 0.95rem; }
+    .tool-page-content { padding-bottom: 60px; }
     code { font-family: 'Roboto Mono', monospace; background: color-mix(in srgb, currentColor 8%, transparent); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
-    .input-card { margin-bottom: 24px; }
+    .input-card { margin-bottom: 24px; border-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 20%, transparent); }
     .full-width { width: 100%; }
-    .json-field { margin-top: 16px; }
-    .error-hint { color: var(--mat-sys-error, #d32f2f); font-size: 0.875rem; display: flex; align-items: center; gap: 4px; margin-top: -8px; margin-bottom: 8px; }
-    .store-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .store-name { font-size: 1.2rem; font-weight: 600; }
+    .json-field { margin-top: 8px; }
+    .error-hint { color: var(--mat-sys-error, #f44336); display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.9rem; margin-top: 8px; }
+
+    .store-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .header-actions { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+    .store-items { display: flex; flex-direction: column; gap: 8px; }
+    .store-item { display: flex; align-items: center; gap: 12px; }
+    .store-name { font-size: 1.25rem; font-weight: 700; color: color-mix(in srgb, currentColor 80%, transparent); }
     .config-card { margin-bottom: 20px; }
     .config-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding-top: 8px; }
     .config-field { flex: 1; min-width: 160px; }
@@ -362,6 +433,19 @@ type SplitMethod = 'proportional' | 'flat';
     .item-name-group { display: flex; flex-direction: column; gap: 2px; }
     .item-title { font-weight: 500; }
     .help-icon { font-size: 0.85em; opacity: 0.5; vertical-align: middle; }
+
+    /* 卡片模式樣式 */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+    .item-card { border-radius: 12px; transition: transform 0.2s; border: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+    .item-card:hover { transform: translateY(-2px); }
+    .item-card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid color-mix(in srgb, currentColor 5%, transparent); }
+    .item-card-buyer { display: flex; flex-direction: column; font-weight: 600; }
+    .item-card-payable { font-size: 1.2rem; font-weight: 800; color: var(--mat-sys-primary, #1976d2); }
+    .item-card-content { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .item-card-title { font-weight: 500; font-size: 1.05rem; }
+    .item-card-details { display: flex; gap: 12px; font-size: 0.85rem; opacity: 0.7; }
+    .item-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, currentColor 10%, transparent); }
+    .card-input-label { font-size: 0.75rem; opacity: 0.6; margin-bottom: 4px; display: block; }
   `],
 })
 export class UberEatsSettlementComponent {
@@ -369,10 +453,13 @@ export class UberEatsSettlementComponent {
 
   rawJson = '';
   parseError = signal('');
-  storeName = signal('');
-  orderStatus = signal('');
-  private _jsonTotal = signal(0);
+  viewMode = signal<'table' | 'card'>('table');
+  parsedOrders = signal<ParsedOrderSummary[]>([]);
   orderItems = signal<OrderItem[]>([]);
+
+  readonly _jsonTotal = computed(() => {
+    return this.parsedOrders().reduce((sum, o) => sum + o.jsonTotal, 0);
+  });
 
   globalDiscount = 0;
   deliveryFee = 0;
@@ -423,30 +510,52 @@ export class UberEatsSettlementComponent {
       const data = jsonData as Record<string, unknown>;
       const orders = (data['data'] as Record<string, unknown>)['orders'] as unknown[];
       const order = orders[0] as Record<string, unknown>;
+      
+      const orderUUID = order['uuid'] as string || `uuid-${Date.now()}`;
+      if (append && this.parsedOrders().some(o => o.uuid === orderUUID)) {
+        this.parseError.set('⚠️ 此訂單已經存在於列表中，已忽略重複載入。');
+        return;
+      }
+
       const feedCards = order['feedCards'] as Array<Record<string, unknown>>;
       const summaryCard = feedCards.find(c => c['orderSummary']) as Record<string, unknown> | undefined;
       if (!summaryCard) throw new Error('找不到 orderSummary 資料');
 
       const analytics = order['analytics'] as Record<string, unknown>;
       const analyticsData = analytics['data'] as Record<string, unknown>;
-      this._jsonTotal.set(parseFloat(analyticsData['order_total'] as string) || 0);
+      const jsonTotal = parseFloat(analyticsData['order_total'] as string) || 0;
 
       const orderInfo = order['orderInfo'] as Record<string, unknown>;
       const storeInfo = orderInfo['storeInfo'] as Record<string, unknown>;
-      const storeName = storeInfo['name'] as string || '未知店家';
-      this.storeName.set(storeName);
+      let storeName = storeInfo['name'] as string || '未知店家';
+      
+      const activeOrderOverview = order['activeOrderOverview'] as Record<string, unknown> | undefined;
+      const tertiaryInfo = activeOrderOverview?.['tertiaryInfo'] as Record<string, unknown> | undefined;
+      const groupOrderName = tertiaryInfo?.['title'] as string | undefined;
+      if (groupOrderName && typeof groupOrderName === 'string') {
+        storeName += ` [${groupOrderName}]`;
+      }
 
       const activeStatus = order['activeOrderStatus'] as Record<string, unknown> | undefined;
       const subtitleSummary = activeStatus?.['subtitleSummary'] as Record<string, unknown> | undefined;
       const summary = subtitleSummary?.['summary'] as any;
-      this.orderStatus.set(typeof summary === 'string' ? summary : (summary?.['text'] || ''));
+      const status = typeof summary === 'string' ? summary : (summary?.['text'] || '');
 
       const orderSummary = summaryCard['orderSummary'] as Record<string, unknown>;
       const parsed = this.parseSections(orderSummary['sections'] as Array<Record<string, unknown>>, storeName);
       
+      const newOrderSummary: ParsedOrderSummary = {
+        uuid: orderUUID,
+        storeName,
+        status,
+        jsonTotal
+      };
+
       if (append) {
+        this.parsedOrders.set([...this.parsedOrders(), newOrderSummary]);
         this.orderItems.set([...this.orderItems(), ...parsed]);
       } else {
+        this.parsedOrders.set([newOrderSummary]);
         this.orderItems.set(parsed);
       }
       this.recalculate();
@@ -632,9 +741,7 @@ export class UberEatsSettlementComponent {
   clearAll(): void {
     this.rawJson = '';
     this.parseError.set('');
-    this.storeName.set('');
-    this.orderStatus.set('');
-    this._jsonTotal.set(0);
+    this.parsedOrders.set([]);
     this.orderItems.set([]);
     this.discountGroups.set([]);
     this.globalDiscount = 0;

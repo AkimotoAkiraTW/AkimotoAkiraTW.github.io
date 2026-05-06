@@ -16,6 +16,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { interval, Subscription } from 'rxjs';
+import { ToolLayoutComponent } from '../tool-layout.component';
 
 // ─── 資料模型 ────────────────────────────────────────────────────────────────
 
@@ -53,24 +54,18 @@ interface EndpointCard {
     MatFormFieldModule,
     MatInputModule,
     MatTooltipModule,
+    ToolLayoutComponent,
   ],
   template: `
-    <div class="content-container tool-page">
-
-      <!-- 返回 -->
-      <a mat-button routerLink="/tools" class="back-link">
-        <mat-icon>arrow_back</mat-icon> 回工具箱
-      </a>
-
-      <header class="tool-header">
-        <div class="tool-title-row">
-          <h1>Connection Checker</h1>
-          <button mat-raised-button color="primary" (click)="addCard()">
-            <mat-icon>add</mat-icon> Add Endpoint
-          </button>
-        </div>
-        <p class="subtitle">監控多個端點的連線狀態，失敗時發送桌面通知。</p>
-      </header>
+    <app-tool-layout 
+      title="Connection Checker" 
+      description="監控多個端點的連線狀態，失敗時發送桌面通知。">
+      
+      <div class="tool-actions-bar">
+        <button mat-raised-button color="primary" (click)="addCard()">
+          <mat-icon>add</mat-icon> Add Endpoint
+        </button>
+      </div>
 
       <!-- 卡片網格 -->
       @if (cards().length === 0) {
@@ -78,7 +73,7 @@ interface EndpointCard {
           <mat-card-content>
             <mat-icon class="empty-icon">wifi_off</mat-icon>
             <p>尚未設定任何監控端點</p>
-            <p class="empty-hint">點擊右上角「Add Endpoint」開始新增。</p>
+            <p class="empty-hint">點擊上方「Add Endpoint」開始新增。</p>
           </mat-card-content>
         </mat-card>
       }
@@ -169,41 +164,13 @@ interface EndpointCard {
           </mat-card>
         }
       </div>
-    </div>
+    </app-tool-layout>
   `,
   styles: [`
-    .tool-page {
-      padding-top: 24px;
-      padding-bottom: 60px;
-    }
-
-    .back-link {
-      display: inline-flex;
-      margin-bottom: 16px;
-    }
-
-    .tool-header { margin-bottom: 24px; }
-
-    .tool-title-row {
+    .tool-actions-bar {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-bottom: 6px;
-    }
-
-    .tool-header h1 {
-      font-size: clamp(1.6rem, 3vw, 2.2rem);
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      margin: 0;
-    }
-
-    .subtitle {
-      opacity: 0.6;
-      font-size: 0.95rem;
-      margin: 0;
+      justify-content: flex-end;
+      margin-bottom: 24px;
     }
 
     /* 空狀態 */

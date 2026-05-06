@@ -22,17 +22,17 @@ import { SITE_CONFIG } from '../../core/config/site.config';
           <h1 class="hero-title">{{ cfg.displayName }}</h1>
           <p class="hero-summary">{{ r.summary }}</p>
           <div class="hero-contacts">
-            @if (r.contact?.email) {
+            @if (r.contact.email) {
               <a [href]="'mailto:' + r.contact.email" class="contact-chip">
                 <mat-icon>email</mat-icon>{{ r.contact.email }}
               </a>
             }
-            @if (r.contact?.github) {
+            @if (r.contact.github) {
               <a [href]="'https://github.com/' + r.contact.github" target="_blank" class="contact-chip">
                 <mat-icon>code</mat-icon>{{ r.contact.github }}
               </a>
             }
-            @if (r.contact?.location) {
+            @if (r.contact.location) {
               <span class="contact-chip">
                 <mat-icon>location_on</mat-icon>{{ r.contact.location }}
               </span>
