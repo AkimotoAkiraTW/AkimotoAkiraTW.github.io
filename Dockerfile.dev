@@ -1,0 +1,30 @@
+# =====================================================
+# Dockerfile.dev - Angular 21 Development Container
+# 用途：本地開發環境，不需在主機安裝 Node.js 或 Angular CLI
+# =====================================================
+
+FROM node:22-alpine
+
+# 安裝必要工具：git, openssh-client (for git push)
+RUN apk add --no-cache git openssh-client
+
+# 設定工作目錄
+WORKDIR /app
+
+# 全域安裝 Angular CLI 21（對應 package.json 的 @angular/cli ^21.1.0）
+RUN npm install -g @angular/cli@21
+
+# 複製 package.json 先安裝依賴（利用 Docker Layer Cache 加速）
+COPY package*.json ./
+RUN npm ci
+
+# 開發時透過 volume mount 覆蓋 /app，
+# 這裡的 COPY 只是讓初次建構有完整環境。
+# 實際開發中，原始碼從主機 volume 掛載進來。
+COPY . .
+
+# 開放 Angular dev server 的埠口
+EXPOSE 4200
+
+# 預設啟動指令：啟動 dev server 並允許外部連線
+CMD ["ng", "serve", "portfolio", "--host", "0.0.0.0", "--poll", "1000"]

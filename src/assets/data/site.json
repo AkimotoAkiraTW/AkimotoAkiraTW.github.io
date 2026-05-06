@@ -1,0 +1,14 @@
+{
+  "displayName": "KC",
+  "githubUsername": "AkimotoAkiraTW",
+  "siteUrl": "https://AkimotoAkiraTW.github.io",
+  "siteDescription": "具備豐富的系統開發與架構維護經驗，擅長以 C#、SQL 與網頁前端技術解決複雜的商業問題，具備端到端全週期交付能力。",
+  "siteTitle": "KC | 全端工程師",
+  "copyrightYear": 2026,
+  "navLabels": {
+    "home": "首頁",
+    "portfolio": "作品集",
+    "blog": "技術隨筆",
+    "tools": "工具箱"
+  }
+}

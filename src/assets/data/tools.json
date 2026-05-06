@@ -1,0 +1,30 @@
+[
+  {
+    "id": "json-formatter",
+    "name": "JSON 格式化工具",
+    "description": "貼上 JSON 字串進行格式化、語法驗證與高亮顯示。",
+    "icon": "data_object",
+    "route": "json-formatter"
+  },
+  {
+    "id": "uber-eats-settlement",
+    "name": "Uber Eats 對帳工具",
+    "description": "貼入團購訂單 JSON，自動計算各成員應付金額，支援 BOGO 與運費分攤，可匯出 CSV。",
+    "icon": "receipt_long",
+    "route": "uber-eats-settlement"
+  },
+  {
+    "id": "connection-checker",
+    "name": "Connection Checker",
+    "description": "多端點連線狀態即時監控，可自訂輪詢頻率，連線異常時發送桌面通知。",
+    "icon": "network_check",
+    "route": "connection-checker"
+  },
+  {
+    "id": "number-to-chinese",
+    "name": "數字轉中文大寫",
+    "description": "將阿拉伯數字轉換為國字大寫金額，支援角分處理，報帳出差費用的好幫手。",
+    "icon": "currency_exchange",
+    "route": "number-to-chinese"
+  }
+]

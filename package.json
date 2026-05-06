@@ -1,0 +1,34 @@
+{
+  "name": "portfolio",
+  "private": true,
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve portfolio",
+    "prebuild": "node scripts/generate-blog-index.mjs",
+    "build": "ng build --configuration production",
+    "postbuild": "node scripts/inject-seo.mjs"
+  },
+  "dependencies": {
+    "@angular/animations": "^21.1.0",
+    "@angular/cdk": "^21.1.0",
+    "@angular/common": "^21.1.0",
+    "@angular/compiler": "^21.1.0",
+    "@angular/core": "^21.1.0",
+    "@angular/forms": "^21.1.0",
+    "@angular/material": "^21.1.0",
+    "@angular/platform-browser": "^21.1.0",
+    "@angular/router": "^21.1.0",
+    "marked": "^17.0.6",
+    "ngx-markdown": "^21.2.0",
+    "prismjs": "^1.30.0",
+    "rxjs": "^7.8.1",
+    "tslib": "^2.5.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.1.0",
+    "@angular/cli": "^21.1.0",
+    "@angular/compiler-cli": "^21.1.0",
+    "@types/marked": "^5.0.2",
+    "typescript": "^5.9.3"
+  }
+}

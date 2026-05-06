@@ -1,0 +1,116 @@
+/* Google Fonts — Inter (拉丁字) + Noto Sans TC (繁體中文) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Fluid Typography Base */
+  font-size: clamp(14px, 1vw + 10px, 16px);
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', 'Noto Sans TC', 'Helvetica Neue', sans-serif;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 柔和文字預設顏色 (會被 theme 覆寫，但提供基礎值) */
+  color: #2d3748;
+}
+
+body {
+  transition: background-color 300ms ease, color 300ms ease;
+  background-color: #f8fafc; /* 更柔和的亮白底色 */
+  color: #334155;            /* Slate-700 護眼深灰 */
+}
+
+html.dark-theme body {
+  background-color: #0f172a; /* Slate-900 深藍灰底色 */
+  color: #e2e8f0;            /* Slate-200 柔和淺灰字 */
+}
+
+html.dark-theme .mat-mdc-card {
+  background-color: #1e293b !important; /* Slate-800 卡片底色 */
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 200ms ease;
+}
+
+a:hover {
+  opacity: 0.7;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ── Angular Material Overrides (極簡圓潤風格) ── */
+.mat-mdc-card {
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  border: 1px solid color-mix(in srgb, currentColor 8%, transparent) !important;
+  background-color: var(--mat-card-container-color, #ffffff) !important;
+}
+
+.mat-mdc-button, .mat-mdc-raised-button, .mat-mdc-stroked-button {
+  border-radius: 9999px !important; /* 藥丸形狀按鈕 */
+  letter-spacing: 0.02em;
+}
+
+.mat-mdc-standard-chip {
+  border-radius: 8px !important;
+  border: none !important;
+  background-color: color-mix(in srgb, currentColor 5%, transparent) !important;
+  font-weight: 500;
+}
+
+/* ── Page header (共用) ── */
+.page-header {
+  text-align: center;
+  /* 更大量的留白 */
+  padding: clamp(48px, 8vw, 80px) 0 clamp(40px, 6vw, 64px);
+}
+
+.page-header h1 {
+  /* Fluid Title */
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.page-header p {
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
+  opacity: 0.6;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ── Layout container ── */
+.content-container {
+  max-width: 1000px; /* 縮減最大寬度讓文字閱讀更集中 */
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+@media (min-width: 768px) {
+  .content-container { padding: 0 40px; }
+}
+
+@media (min-width: 1024px) {
+  .content-container { padding: 0 56px; }
+}
+
