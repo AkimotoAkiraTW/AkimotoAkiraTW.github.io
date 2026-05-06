@@ -22,6 +22,7 @@ import { MatDividerModule } from '@angular/material/divider';
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
 
 interface OrderItem {
+  storeName: string;
   buyer: string;
   itemName: string;
   quantity: number;
@@ -30,10 +31,18 @@ interface OrderItem {
   customizationPrice: number;
   /** API 已計算的折扣（如買一送一的顯式折扣） */
   explicitDiscount: number;
-  /** 使用者手動標記的 BOGO（買一送一，底價歸零，僅收加料費）*/
-  manualBogo: boolean;
+  /** 分組折抵用的群組標籤 (例如 'A', 'B') */
+  discountGroup: string | null;
   /** 計算後的應付金額 */
   finalPayable: number;
+}
+
+interface DiscountGroupConfig {
+  groupId: string;
+  /** 手動追加的總折扣金額 (例如 240) */
+  manualDiscount: number;
+  /** 免除的底價份數 (例如買一送一時，輸入送的杯數) */
+  waivedCups: number;
 }
 
 type SplitMethod = 'proportional' | 'flat';
@@ -69,7 +78,7 @@ type SplitMethod = 'proportional' | 'flat';
 
       <header class="tool-header">
         <h1>Uber Eats 團購對帳工具</h1>
-        <p class="subtitle">貼入訂單 JSON，自動計算各成員應付金額，支援 BOGO 與費用分攤。</p>
+        <p class="subtitle">貼入訂單 JSON，自動計算各成員應付金額，支援公平折扣平攤與差價隔離。</p>
       </header>
 
       <!-- JSON 輸入面板 -->
@@ -102,10 +111,13 @@ type SplitMethod = 'proportional' | 'flat';
         </mat-card-content>
         <mat-card-actions align="end">
           <button mat-button (click)="clearAll()">
-            <mat-icon>clear</mat-icon> 清除
+            <mat-icon>clear</mat-icon> 清除全部
           </button>
-          <button mat-raised-button color="primary" (click)="parseJson()">
-            <mat-icon>auto_fix_high</mat-icon> 解析
+          <button mat-stroked-button (click)="parseJson(true)" [disabled]="!rawJson">
+            <mat-icon>add</mat-icon> 累積解析
+          </button>
+          <button mat-raised-button color="primary" (click)="parseJson(false)" [disabled]="!rawJson">
+            <mat-icon>auto_fix_high</mat-icon> 全新解析
           </button>
         </mat-card-actions>
       </mat-card>
@@ -148,6 +160,53 @@ type SplitMethod = 'proportional' | 'flat';
           </mat-card-content>
         </mat-card>
 
+        <!-- 群組折扣設定 (僅在有群組被選用時顯示) -->
+        @if (activeGroups().length > 0) {
+          <mat-card appearance="outlined" class="group-card">
+            <mat-card-header>
+              <mat-icon mat-card-avatar>group_work</mat-icon>
+              <mat-card-title>進階群組折扣 (均分模式)</mat-card-title>
+              <mat-card-subtitle>
+                適用於「買一送一」、「滿千折百」等複雜折扣。群組總折扣將依底價比例均攤給群組成員。
+              </mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="group-configs">
+                @for (groupId of activeGroups(); track groupId) {
+                  <div class="group-row">
+                    <div class="group-info">
+                      <span class="group-badge">{{ groupId }}</span>
+                      <span class="group-stats">
+                        (共 {{ getGroupItemCount(groupId) }} 份, 
+                        總底價: {{ fmt(getGroupBasePriceTotal(groupId)) }}, 
+                        已知折扣: {{ fmt(getGroupExplicitDiscount(groupId)) }})
+                      </span>
+                    </div>
+                    <div class="group-action">
+                      <mat-form-field appearance="outline" class="group-discount-field">
+                        <mat-label>免除杯數 (BOGO)</mat-label>
+                        <input matInput type="number" 
+                               [ngModel]="getGroupWaivedCups(groupId)" 
+                               (ngModelChange)="updateGroupWaivedCups(groupId, $event)" 
+                               min="0" step="1">
+                        <mat-icon matPrefix>local_cafe</mat-icon>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" class="group-discount-field">
+                        <mat-label>額外滿減折扣 ($)</mat-label>
+                        <input matInput type="number" 
+                               [ngModel]="getGroupManualDiscount(groupId)" 
+                               (ngModelChange)="updateGroupDiscount(groupId, $event)" 
+                               min="0">
+                        <mat-icon matPrefix>money_off</mat-icon>
+                      </mat-form-field>
+                    </div>
+                  </div>
+                }
+              </div>
+            </mat-card-content>
+          </mat-card>
+        }
+
         <!-- 統計卡片 -->
         <div class="stats-row">
           <div class="stat-card">
@@ -185,13 +244,13 @@ type SplitMethod = 'proportional' | 'flat';
               <table class="order-table">
                 <thead>
                   <tr>
-                    <th>訂購人</th>
+                    <th>店家/訂購人</th>
                     <th>品項</th>
                     <th class="center">數量</th>
                     <th class="right">原價</th>
-                    <th class="right">加項</th>
-                    <th class="center" matTooltip="手動標記 BOGO（買一送一），系統將免除底價，僅保留加項費用">
-                      BOGO <mat-icon inline class="help-icon">help_outline</mat-icon>
+                    <th class="right">加項費</th>
+                    <th class="center" matTooltip="將多個品項設定為同群組，即可共享該群組的總折扣">
+                      折扣群組 <mat-icon inline class="help-icon">help_outline</mat-icon>
                     </th>
                     <th class="right">應付金額</th>
                   </tr>
@@ -199,9 +258,14 @@ type SplitMethod = 'proportional' | 'flat';
                 <tbody>
                   @for (item of orderItems(); track $index) {
                     <tr>
-                      <td class="buyer-cell">{{ item.buyer }}</td>
+                      <td class="buyer-cell">
+                        <div class="store-tag">{{ item.storeName }}</div>
+                        {{ item.buyer }}
+                      </td>
                       <td>
-                        {{ item.itemName }}
+                        <div class="item-name-group">
+                          <span class="item-title">{{ item.itemName }}</span>
+                        </div>
                         @if (item.explicitDiscount > 0) {
                           <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
                         }
@@ -218,10 +282,14 @@ type SplitMethod = 'proportional' | 'flat';
                         />
                       </td>
                       <td class="center">
-                        <mat-checkbox
-                          [checked]="item.manualBogo"
-                          (change)="toggleBogo($index, $event.checked)"
-                        ></mat-checkbox>
+                        <select class="group-select" 
+                                [ngModel]="item.discountGroup" 
+                                (ngModelChange)="updateItemOption($index, 'discountGroup', $event)">
+                          <option [ngValue]="null">無</option>
+                          @for (g of availableGroups; track g) {
+                            <option [ngValue]="g">{{ g }}</option>
+                          }
+                        </select>
                       </td>
                       <td class="right payable">
                         {{ fmt(item.finalPayable) }}
@@ -243,270 +311,114 @@ type SplitMethod = 'proportional' | 'flat';
     </div>
   `,
   styles: [`
-    .tool-page {
-      padding-top: 24px;
-      padding-bottom: 60px;
-    }
-
-    .back-link {
-      display: inline-flex;
-      margin-bottom: 16px;
-    }
-
-    .tool-header {
-      margin-bottom: 24px;
-    }
-
-    .tool-header h1 {
-      font-size: clamp(1.6rem, 3vw, 2.2rem);
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      margin-bottom: 6px;
-    }
-
-    .subtitle {
-      opacity: 0.6;
-      font-size: 0.95rem;
-    }
-
-    code {
-      font-family: 'Roboto Mono', monospace;
-      background: color-mix(in srgb, currentColor 8%, transparent);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 0.85em;
-    }
-
+    .tool-page { padding-top: 24px; padding-bottom: 60px; }
+    .back-link { display: inline-flex; margin-bottom: 16px; }
+    .tool-header { margin-bottom: 24px; }
+    .tool-header h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 600; margin-bottom: 6px; }
+    .subtitle { opacity: 0.6; font-size: 0.95rem; }
+    code { font-family: 'Roboto Mono', monospace; background: color-mix(in srgb, currentColor 8%, transparent); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
     .input-card { margin-bottom: 24px; }
-
     .full-width { width: 100%; }
     .json-field { margin-top: 16px; }
-
-    .error-hint {
-      color: var(--mat-sys-error, #d32f2f);
-      font-size: 0.875rem;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      margin-top: -8px;
-      margin-bottom: 8px;
-    }
-
-    /* 店家資訊列 */
-    .store-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .store-name {
-      font-size: 1.2rem;
-      font-weight: 600;
-    }
-
-    /* 設定列 */
+    .error-hint { color: var(--mat-sys-error, #d32f2f); font-size: 0.875rem; display: flex; align-items: center; gap: 4px; margin-top: -8px; margin-bottom: 8px; }
+    .store-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .store-name { font-size: 1.2rem; font-weight: 600; }
     .config-card { margin-bottom: 20px; }
-    .config-row {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      padding-top: 8px;
-    }
+    .config-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding-top: 8px; }
     .config-field { flex: 1; min-width: 160px; }
-
-    /* 統計卡片 */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .stat-card {
-      background: color-mix(in srgb, currentColor 4%, transparent);
-      border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-    }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .stat-card { background: color-mix(in srgb, currentColor 4%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); border-radius: 12px; padding: 16px; text-align: center; }
     .stat-card.accent { background: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 5%, transparent); }
-    .stat-card.highlight {
-      background: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 6%, transparent);
-      border-color: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 20%, transparent);
-    }
-
-    .stat-label {
-      display: block;
-      font-size: 0.75rem;
-      opacity: 0.6;
-      margin-bottom: 6px;
-      letter-spacing: 0.02em;
-    }
-
-    .stat-value {
-      font-size: 1.4rem;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
+    .stat-card.highlight { background: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 6%, transparent); border-color: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 20%, transparent); }
+    .stat-label { display: block; font-size: 0.75rem; opacity: 0.6; margin-bottom: 6px; }
+    .stat-value { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
     .stat-value.positive { color: #16a34a; }
     .stat-value.negative { color: var(--mat-sys-error, #d32f2f); }
     .stat-value.primary { color: var(--mat-sys-primary, #1976d2); }
-
-    /* 警告列 */
-    .balance-warning {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: color-mix(in srgb, #f59e0b 10%, transparent);
-      border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
-      color: #b45309;
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-size: 0.875rem;
-      margin-bottom: 16px;
-    }
-
-    /* 明細表 */
+    .balance-warning { display: flex; align-items: center; gap: 8px; background: color-mix(in srgb, #f59e0b 10%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent); color: #b45309; border-radius: 8px; padding: 12px 16px; font-size: 0.875rem; margin-bottom: 16px; }
     .table-card { margin-bottom: 24px; }
-
-    .table-wrapper {
-      overflow-x: auto;
-      margin: 0 -16px;
-      padding: 0 16px;
-    }
-
-    .order-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-      min-width: 600px;
-    }
-
-    .order-table th,
-    .order-table td {
-      padding: 12px 14px;
-      text-align: left;
-      border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
-    }
-
-    .order-table th {
-      font-size: 0.8rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      opacity: 0.6;
-    }
-
-    .order-table tr:last-child td { border-bottom: none; }
-    .order-table tr:hover td {
-      background: color-mix(in srgb, currentColor 3%, transparent);
-    }
-
+    .table-wrapper { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+    .order-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 600px; }
+    .order-table th, .order-table td { padding: 12px 14px; border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent); text-align: left; }
+    .order-table th { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; opacity: 0.6; }
     .center { text-align: center; }
     .right { text-align: right; font-variant-numeric: tabular-nums; }
-
     .buyer-cell { font-weight: 500; }
+    .store-tag { font-size: 0.65rem; opacity: 0.5; font-weight: 400; }
+    .inline-input { width: 60px; background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); color: inherit; border-radius: 4px; padding: 2px 4px; text-align: right; outline: none; }
+    
+    .group-card { margin-bottom: 20px; border-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 30%, transparent); }
+    .group-configs { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+    .group-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: color-mix(in srgb, currentColor 3%, transparent); padding: 12px 16px; border-radius: 8px; }
+    .group-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 280px; }
+    .group-badge { background: var(--mat-sys-primary, #1976d2); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .group-stats { font-size: 0.85rem; opacity: 0.8; }
+    .group-action { display: flex; align-items: center; gap: 12px; }
+    .group-discount-field { width: 160px; margin-bottom: -1.34375em; }
+    .group-select { padding: 4px 8px; border-radius: 4px; font-family: inherit; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); color: inherit; outline: none; }
 
-    .payable {
-      font-weight: 700;
-      color: var(--mat-sys-primary, #1976d2);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .customization-cell {
-      opacity: 0.8;
-      font-size: 0.85em;
-    }
-
-    .inline-input {
-      width: 60px;
-      background: color-mix(in srgb, currentColor 5%, transparent);
-      border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-      color: inherit;
-      border-radius: 4px;
-      padding: 2px 4px;
-      text-align: right;
-      font-family: inherit;
-      outline: none;
-    }
-    .inline-input:focus {
-      border-color: var(--mat-sys-primary, #1976d2);
-      background: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 5%, transparent);
-    }
-
-    .discount-chip {
-      display: inline-block;
-      background: #fbbf24;
-      color: #78350f;
-      font-size: 0.72rem;
-      padding: 1px 7px;
-      border-radius: 999px;
-      margin-left: 6px;
-      font-weight: 600;
-      vertical-align: middle;
-    }
-
-    .help-icon {
-      font-size: 0.85em;
-      opacity: 0.5;
-      vertical-align: middle;
-    }
+    .discount-chip { display: inline-block; background: #fbbf24; color: #78350f; font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+    .payable { font-weight: 700; color: var(--mat-sys-primary, #1976d2); }
+    .item-name-group { display: flex; flex-direction: column; gap: 2px; }
+    .item-title { font-weight: 500; }
+    .help-icon { font-size: 0.85em; opacity: 0.5; vertical-align: middle; }
   `],
 })
 export class UberEatsSettlementComponent {
   private snackBar = inject(MatSnackBar);
 
-  // ─── 輸入狀態 ──────────────────────────────────────────────────────────────
   rawJson = '';
   parseError = signal('');
-
-  // ─── 解析結果 ──────────────────────────────────────────────────────────────
   storeName = signal('');
   orderStatus = signal('');
   private _jsonTotal = signal(0);
   orderItems = signal<OrderItem[]>([]);
 
-  // ─── 設定 ──────────────────────────────────────────────────────────────────
   globalDiscount = 0;
   deliveryFee = 0;
   splitMethod: SplitMethod = 'proportional';
 
-  // ─── Computed 統計 ─────────────────────────────────────────────────────────
+  // ─── 群組折扣設定 ────────────────────────────────────────────────────────
+  availableGroups = ['A', 'B', 'C', 'D', 'E'];
+  discountGroups = signal<DiscountGroupConfig[]>([]);
+
+  readonly activeGroups = computed(() => {
+    const items = this.orderItems();
+    const groupSet = new Set<string>();
+    items.forEach(i => {
+      if (i.discountGroup) groupSet.add(i.discountGroup);
+    });
+    return Array.from(groupSet).sort();
+  });
+
   readonly stats = computed(() => {
     const items = this.orderItems();
     const jsonTotal = this._jsonTotal();
-
     let itemSum = 0;
     let checkSum = 0;
     items.forEach(i => {
-      itemSum += i.price - i.explicitDiscount;
+      itemSum += (i.price - i.explicitDiscount);
       checkSum += i.finalPayable;
     });
-    return {
-      itemSum,
-      jsonTotal,
-      discrepancy: itemSum - jsonTotal,
-      checkSum,
-    };
+    return { itemSum, jsonTotal, discrepancy: itemSum - jsonTotal, checkSum };
   });
 
   readonly showBalanceWarning = computed(
-    () => Math.abs(this.stats().checkSum - this.stats().jsonTotal) > 0.1 && this.orderItems().length > 0
+    () => Math.abs(this.stats().checkSum - this.stats().jsonTotal) > 0.5 && this.orderItems().length > 0
   );
 
-  // ─── 動作 ──────────────────────────────────────────────────────────────────
-
-  parseJson(): void {
+  parseJson(append = false): void {
     this.parseError.set('');
     try {
       const data = JSON.parse(this.rawJson);
-      this.processData(data);
+      this.processData(data, append);
+      this.rawJson = '';
     } catch {
       this.parseError.set('JSON 格式錯誤，請確認貼上的內容正確無誤。');
     }
   }
 
-  private processData(jsonData: unknown): void {
+  private processData(jsonData: unknown, append: boolean): void {
     try {
       const data = jsonData as Record<string, unknown>;
       const orders = (data['data'] as Record<string, unknown>)['orders'] as unknown[];
@@ -521,23 +433,29 @@ export class UberEatsSettlementComponent {
 
       const orderInfo = order['orderInfo'] as Record<string, unknown>;
       const storeInfo = orderInfo['storeInfo'] as Record<string, unknown>;
-      this.storeName.set(storeInfo['name'] as string || '');
+      const storeName = storeInfo['name'] as string || '未知店家';
+      this.storeName.set(storeName);
 
       const activeStatus = order['activeOrderStatus'] as Record<string, unknown> | undefined;
-      this.orderStatus.set(
-        (activeStatus?.['subtitleSummary'] as Record<string, unknown>)?.['summary'] as string || ''
-      );
+      const subtitleSummary = activeStatus?.['subtitleSummary'] as Record<string, unknown> | undefined;
+      const summary = subtitleSummary?.['summary'] as any;
+      this.orderStatus.set(typeof summary === 'string' ? summary : (summary?.['text'] || ''));
 
       const orderSummary = summaryCard['orderSummary'] as Record<string, unknown>;
-      const parsed = this.parseSections(orderSummary['sections'] as Array<Record<string, unknown>>);
-      this.orderItems.set(parsed);
+      const parsed = this.parseSections(orderSummary['sections'] as Array<Record<string, unknown>>, storeName);
+      
+      if (append) {
+        this.orderItems.set([...this.orderItems(), ...parsed]);
+      } else {
+        this.orderItems.set(parsed);
+      }
       this.recalculate();
     } catch (err) {
       this.parseError.set(`解析失敗：${(err as Error).message}`);
     }
   }
 
-  private parseSections(sections: Array<Record<string, unknown>>): OrderItem[] {
+  private parseSections(sections: Array<Record<string, unknown>>, storeName: string): OrderItem[] {
     const results: OrderItem[] = [];
     sections.forEach(section => {
       const header = section['header'] as Record<string, unknown>;
@@ -546,26 +464,19 @@ export class UberEatsSettlementComponent {
       items.forEach(item => {
         const price = parseFloat(((item['price'] as string) || '$0').replace(/[^\d.]/g, '')) || 0;
         const subtitle = (item['subtitle'] as string) || '';
-
-        // 解析加料/加大費用 (尋找 ($10.00) 格式的字串，容許空格)
         let customizationPrice = 0;
         const priceMatches = subtitle.matchAll(/\(\$\s*(\d+\.?\d*)\s*\)/g);
         for (const match of priceMatches) {
           customizationPrice += parseFloat(match[1]);
         }
-
         const discountObj = item['itemDiscount'] as Record<string, unknown> | undefined;
-        const explicitDiscount = discountObj
-          ? parseFloat(((discountObj['formattedAmount'] as string) || '0').replace(/[^\d.]/g, '')) || 0
-          : 0;
+        const explicitDiscount = discountObj ? parseFloat(((discountObj['formattedAmount'] as string) || '0').replace(/[^\d.]/g, '')) || 0 : 0;
         results.push({
-          buyer,
+          storeName, buyer,
           itemName: item['title'] as string,
           quantity: (item['quantity'] as number) || 1,
-          price,
-          customizationPrice,
-          explicitDiscount,
-          manualBogo: false,
+          price, customizationPrice, explicitDiscount,
+          discountGroup: null,
           finalPayable: 0,
         });
       });
@@ -573,11 +484,63 @@ export class UberEatsSettlementComponent {
     return results;
   }
 
-  toggleBogo(index: number, checked: boolean): void {
+  updateItemOption(index: number, field: 'discountGroup', value: any): void {
     const items = [...this.orderItems()];
-    items[index] = { ...items[index], manualBogo: checked };
+    items[index] = { ...items[index], [field]: value };
     this.orderItems.set(items);
     this.recalculate();
+  }
+
+  getGroupConfig(groupId: string): DiscountGroupConfig | undefined {
+    return this.discountGroups().find(g => g.groupId === groupId);
+  }
+
+  getGroupManualDiscount(groupId: string): number {
+    return this.getGroupConfig(groupId)?.manualDiscount || 0;
+  }
+
+  getGroupWaivedCups(groupId: string): number {
+    return this.getGroupConfig(groupId)?.waivedCups || 0;
+  }
+
+  updateGroupDiscount(groupId: string, amount: number): void {
+    const groups = [...this.discountGroups()];
+    const idx = groups.findIndex(g => g.groupId === groupId);
+    if (idx >= 0) {
+      groups[idx] = { ...groups[idx], manualDiscount: amount };
+    } else {
+      groups.push({ groupId, manualDiscount: amount, waivedCups: 0 });
+    }
+    this.discountGroups.set(groups);
+    this.recalculate();
+  }
+
+  updateGroupWaivedCups(groupId: string, cups: number): void {
+    const groups = [...this.discountGroups()];
+    const idx = groups.findIndex(g => g.groupId === groupId);
+    if (idx >= 0) {
+      groups[idx] = { ...groups[idx], waivedCups: cups };
+    } else {
+      groups.push({ groupId, manualDiscount: 0, waivedCups: cups });
+    }
+    this.discountGroups.set(groups);
+    this.recalculate();
+  }
+
+  getGroupItems(groupId: string): OrderItem[] {
+    return this.orderItems().filter(i => i.discountGroup === groupId);
+  }
+
+  getGroupItemCount(groupId: string): number {
+    return this.getGroupItems(groupId).reduce((sum, item) => sum + item.quantity, 0);
+  }
+
+  getGroupBasePriceTotal(groupId: string): number {
+    return this.getGroupItems(groupId).reduce((sum, item) => sum + (item.price - item.customizationPrice), 0);
+  }
+
+  getGroupExplicitDiscount(groupId: string): number {
+    return this.getGroupItems(groupId).reduce((sum, item) => sum + item.explicitDiscount, 0);
   }
 
   recalculate(): void {
@@ -586,30 +549,62 @@ export class UberEatsSettlementComponent {
 
     const netAdjustment = this.deliveryFee - this.globalDiscount;
 
-    let basePoolTotal = 0;
-    items.forEach(item => {
-      let base = item.price - item.explicitDiscount;
-      if (item.manualBogo) {
-        // BOGO 時，底價歸零，只計入加料費作為基數
-        base = item.customizationPrice;
+    // 1. 建立群組折扣池
+    const groupContexts = new Map<string, { totalBase: number, totalDiscountToDistribute: number }>();
+
+    this.activeGroups().forEach(groupId => {
+      const totalBase = this.getGroupBasePriceTotal(groupId);
+      const itemCount = this.getGroupItemCount(groupId);
+      const explicitDist = this.getGroupExplicitDiscount(groupId);
+      const manualDist = this.getGroupManualDiscount(groupId);
+      const waivedCups = this.getGroupWaivedCups(groupId);
+      
+      let waivedCupsDiscount = 0;
+      if (itemCount > 0 && waivedCups > 0) {
+        waivedCupsDiscount = (totalBase / itemCount) * waivedCups;
       }
-      basePoolTotal += base;
+
+      groupContexts.set(groupId, {
+        totalBase,
+        totalDiscountToDistribute: explicitDist + manualDist + waivedCupsDiscount
+      });
     });
 
-    const updated = items.map(item => {
-      let itemBase = item.price - item.explicitDiscount;
-      if (item.manualBogo) {
-        itemBase = item.customizationPrice;
-      }
+    let globalBasePoolTotal = 0;
 
+    // 2. 第一階段：計算折扣後的 itemBase
+    const phase1Items = items.map(item => {
+      let itemBase = 0;
+      const basePrice = item.price - item.customizationPrice;
+
+      if (item.discountGroup) {
+        const ctx = groupContexts.get(item.discountGroup);
+        if (ctx && ctx.totalBase > 0) {
+          const ratio = basePrice / ctx.totalBase;
+          const discountShare = ctx.totalDiscountToDistribute * ratio;
+          itemBase = basePrice - discountShare + item.customizationPrice;
+        } else {
+          itemBase = item.price - item.explicitDiscount;
+        }
+      } else {
+        itemBase = item.price - item.explicitDiscount;
+      }
+      
+      if (itemBase < 0) itemBase = 0;
+      globalBasePoolTotal += itemBase;
+      return { originalRef: item, computedItemBase: itemBase };
+    });
+
+    // 3. 第二階段：分配全域運費/折扣
+    const updated = phase1Items.map(({ originalRef, computedItemBase }) => {
       let share = 0;
-      if (this.splitMethod === 'proportional' && basePoolTotal > 0) {
-        share = (itemBase / basePoolTotal) * netAdjustment;
+      if (this.splitMethod === 'proportional' && globalBasePoolTotal > 0) {
+        share = (computedItemBase / globalBasePoolTotal) * netAdjustment;
       } else if (this.splitMethod === 'flat') {
         share = netAdjustment / items.length;
       }
 
-      return { ...item, finalPayable: itemBase + share };
+      return { ...originalRef, finalPayable: computedItemBase + share };
     });
 
     this.orderItems.set(updated);
@@ -618,11 +613,11 @@ export class UberEatsSettlementComponent {
   exportCsv(): void {
     const items = this.orderItems();
     const stats = this.stats();
-    let csv = '\uFEFF訂購人,品項,數量,原價,加項,BOGO,應付金額\n';
+    let csv = '\uFEFF店家,訂購人,品項,數量,原價,加項,群組,應付金額\n';
     items.forEach(item => {
-      csv += `${item.buyer},"${item.itemName}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.manualBogo ? 'V' : ''},${item.finalPayable.toFixed(2)}\n`;
+      csv += `${item.storeName},${item.buyer},"${item.itemName}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.discountGroup || ''},${item.finalPayable.toFixed(2)}\n`;
     });
-    csv += `\n總計,,,${stats.itemSum.toFixed(2)},,,${stats.checkSum.toFixed(2)}\n`;
+    csv += `\n總計,,,,${stats.itemSum.toFixed(2)},,,${stats.checkSum.toFixed(2)}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -641,12 +636,12 @@ export class UberEatsSettlementComponent {
     this.orderStatus.set('');
     this._jsonTotal.set(0);
     this.orderItems.set([]);
+    this.discountGroups.set([]);
     this.globalDiscount = 0;
     this.deliveryFee = 0;
     this.splitMethod = 'proportional';
   }
 
-  /** 格式化金額為 $X.XX 字串（避免 tsc 無法解析 Angular pipe 語法）*/
   fmt(value: number): string {
     return '$' + value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
