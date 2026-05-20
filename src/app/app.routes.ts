@@ -52,6 +52,31 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tools/number-to-chinese/number-to-chinese.component').then(m => m.NumberToChineseComponent),
   },
   {
+    path: 'tools/markdown-editor',
+    title: '智慧編輯器 | KC',
+    loadComponent: () => import('./features/tools/markdown-editor/markdown-editor.component').then(m => m.MarkdownEditorComponent),
+  },
+  {
+    path: 'tools/media-declaration-parser',
+    title: '媒體申報檔解析工具 | KC',
+    loadComponent: () => import('./features/tools/media-declaration-parser/media-declaration-parser.component').then(m => m.MediaDeclarationParserComponent),
+  },
+  {
+    path: 'tools/tradevan-parser',
+    title: '關貿 CSV 解析工具 | KC',
+    loadComponent: () => import('./features/tools/tradevan-parser/tradevan-parser.component').then(m => m.TradevanParserComponent),
+  },
+  {
+    path: 'tools/barcode-generator',
+    title: '條碼與 QR Code 產生器 | KC',
+    loadComponent: () => import('./features/tools/barcode-generator/barcode-generator.component').then(m => m.BarcodeGeneratorComponent),
+  },
+  {
+    path: 'tools/barcode-scanner',
+    title: '條碼掃描器 | KC',
+    loadComponent: () => import('./features/tools/barcode-scanner/barcode-scanner.component').then(m => m.BarcodeScannerComponent),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

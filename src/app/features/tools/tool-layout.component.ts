@@ -9,7 +9,7 @@ import { SITE_CONFIG } from '../../core/config/site.config';
   standalone: true,
   imports: [RouterLink, MatButtonModule, MatIconModule],
   template: `
-    <div class="content-container">
+    <div class="content-container" [class.full-width]="fullWidth">
       <!-- 統一的返回按鈕 -->
       <a mat-button routerLink="/tools" class="back-link">
         <mat-icon>arrow_back</mat-icon> 返回工具箱
@@ -30,6 +30,12 @@ import { SITE_CONFIG } from '../../core/config/site.config';
     </div>
   `,
   styles: [`
+    .content-container.full-width {
+      max-width: none;
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+    
     .back-link {
       margin-bottom: 24px;
       opacity: 0.7;
@@ -66,4 +72,5 @@ import { SITE_CONFIG } from '../../core/config/site.config';
 export class ToolLayoutComponent {
   @Input({ required: true }) title!: string;
   @Input() description?: string;
+  @Input() fullWidth = false;
 }

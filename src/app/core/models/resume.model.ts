@@ -18,6 +18,12 @@ export interface ContactInfo {
   linkedin?: string;
 }
 
+export interface Project {
+  name: string;
+  highlights: string[];
+  tech?: string;
+}
+
 export interface Experience {
   company: string;
   position: string;
@@ -25,6 +31,7 @@ export interface Experience {
   endDate: string;
   description: string;
   highlights: string[];
+  projects?: Project[];
 }
 
 export interface Education {

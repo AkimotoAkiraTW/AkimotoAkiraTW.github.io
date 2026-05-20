@@ -22,6 +22,12 @@ import { ToolLayoutComponent } from '../tool-layout.component';
 
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
 
+interface ProductSetting {
+  isBogo: boolean;
+  isGift: boolean;
+  bogoLimit: number | null;
+}
+
 interface OrderItem {
   storeName: string;
   buyer: string;
@@ -32,18 +38,13 @@ interface OrderItem {
   customizationPrice: number;
   /** API 已計算的折扣（如買一送一的顯式折扣） */
   explicitDiscount: number;
-  /** 分組折抵用的群組標籤 (例如 'A', 'B') */
-  discountGroup: string | null;
   /** 計算後的應付金額 */
   finalPayable: number;
-}
-
-interface DiscountGroupConfig {
-  groupId: string;
-  /** 手動追加的總折扣金額 (例如 240) */
-  manualDiscount: number;
-  /** 免除的底價份數 (例如買一送一時，輸入送的杯數) */
-  waivedCups: number;
+  /** 原始解析出的個人應付金額 (防累加變形用) */
+  originalPayable: number;
+  isBogo?: boolean;
+  isGift?: boolean;
+  unitBasePrice: number;
 }
 
 interface ParsedOrderSummary {
@@ -102,10 +103,23 @@ type SplitMethod = 'proportional' | 'flat';
             </mat-form-field>
 
             @if (parseError()) {
-              <p class="error-hint">
-                <mat-icon inline>error_outline</mat-icon>
-                {{ parseError() }}
-              </p>
+              <div class="error-container">
+                <div class="error-header">
+                  <p class="error-hint">
+                    <mat-icon inline>error_outline</mat-icon>
+                    {{ parseError() }}
+                  </p>
+                  <span class="spacer"></span>
+                  @if (canRepair()) {
+                    <button mat-flat-button color="accent" size="small" (click)="repairJson()">
+                      <mat-icon>magic_button</mat-icon> 修復雜質並解析
+                    </button>
+                  }
+                </div>
+                @if (parseErrorDetail()) {
+                  <pre class="error-detail"><code>{{ parseErrorDetail() }}</code></pre>
+                }
+              </div>
             }
           </mat-card-content>
           <mat-card-actions align="end">
@@ -176,62 +190,17 @@ type SplitMethod = 'proportional' | 'flat';
             </mat-card-content>
           </mat-card>
 
-          <!-- 群組折扣設定 (僅在有群組被選用時顯示) -->
-          @if (activeGroups().length > 0) {
-            <mat-card appearance="outlined" class="group-card">
-              <mat-card-header>
-                <mat-icon mat-card-avatar>group_work</mat-icon>
-                <mat-card-title>進階群組折扣 (均分模式)</mat-card-title>
-                <mat-card-subtitle>
-                  適用於「買一送一」、「滿千折百」等複雜折扣。群組總折扣將依底價比例均攤給群組成員。
-                </mat-card-subtitle>
-              </mat-card-header>
-              <mat-card-content>
-                <div class="group-configs">
-                  @for (groupId of activeGroups(); track groupId) {
-                    <div class="group-row">
-                      <div class="group-info">
-                        <span class="group-badge">{{ groupId }}</span>
-                        <span class="group-stats">
-                          (共 {{ getGroupItemCount(groupId) }} 份, 
-                          總底價: {{ fmt(getGroupBasePriceTotal(groupId)) }}, 
-                          已知折扣: {{ fmt(getGroupExplicitDiscount(groupId)) }})
-                        </span>
-                      </div>
-                      <div class="group-action">
-                        <mat-form-field appearance="outline" class="group-discount-field">
-                          <mat-label>免除杯數 (BOGO)</mat-label>
-                          <input matInput type="number" 
-                                 [ngModel]="getGroupWaivedCups(groupId)" 
-                                 (ngModelChange)="updateGroupWaivedCups(groupId, $event)" 
-                                 min="0" step="1">
-                          <mat-icon matPrefix>local_cafe</mat-icon>
-                        </mat-form-field>
-                        <mat-form-field appearance="outline" class="group-discount-field">
-                          <mat-label>額外滿減折扣 ($)</mat-label>
-                          <input matInput type="number" 
-                                 [ngModel]="getGroupManualDiscount(groupId)" 
-                                 (ngModelChange)="updateGroupDiscount(groupId, $event)" 
-                                 min="0">
-                          <mat-icon matPrefix>money_off</mat-icon>
-                        </mat-form-field>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </mat-card-content>
-            </mat-card>
-          }
+
 
           <!-- 數據統計 -->
           <div class="stats-row">
             <div class="stat-card accent">
-              <span class="stat-label">JSON 實付總額</span>
+              <span class="stat-label">Uber 實付總額</span>
               <span class="stat-value positive">{{ fmt(stats().jsonTotal) }}</span>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">差距（待分配）</span>
-              <span class="stat-value" [class.negative]="stats().discrepancy !== 0">
+            <div class="stat-card" [class.warn]="stats().discrepancy !== 0">
+              <span class="stat-label" matTooltip="Uber 實付總額 - 當前對帳總和。差距不為零代表有未分配的折扣或費用">差距（未分配）</span>
+              <span class="stat-value" [class.negative]="stats().discrepancy < 0" [class.positive-warn]="stats().discrepancy > 0">
                 {{ fmt(stats().discrepancy) }}
               </span>
             </div>
@@ -241,11 +210,20 @@ type SplitMethod = 'proportional' | 'flat';
             </div>
           </div>
 
-          <!-- 餘額警告 -->
+          <!-- 餘額警告 + 智慧平攤 -->
           @if (showBalanceWarning()) {
             <div class="balance-warning">
               <mat-icon>warning_amber</mat-icon>
-              計算總和 ({{ fmt(stats().checkSum) }}) 與實付 ({{ fmt(stats().jsonTotal) }}) 尚有差距，請調整折扣或運費。
+              <span>
+                對帳總和 ({{ fmt(stats().checkSum) }}) 與 Uber 實付 ({{ fmt(stats().jsonTotal) }}) 差了
+                <strong>{{ fmt(Math.abs(stats().discrepancy)) }}</strong>，
+                @if (stats().discrepancy < 0) { 可能有未輸入的折扣（例如平台買一送一）。 }
+                @else { 可能有未輸入的運費或服務費。 }
+              </span>
+              <button mat-stroked-button class="smart-btn" (click)="smartDistribute()"
+                matTooltip="將差距金額直接加入全單折扣/運費，使對帳總和與 Uber 實付吻合">
+                <mat-icon>auto_fix_high</mat-icon> 智慧平攤
+              </button>
             </div>
           }
 
@@ -262,9 +240,7 @@ type SplitMethod = 'proportional' | 'flat';
                         <th class="center">數量</th>
                         <th class="right">原價</th>
                         <th class="right">加項費</th>
-                        <th class="center" matTooltip="將多個品項設定為同群組，即可共享該群組的總折扣">
-                          折扣群組 <mat-icon inline class="help-icon">help_outline</mat-icon>
-                        </th>
+
                         <th class="right">應付金額</th>
                       </tr>
                     </thead>
@@ -272,16 +248,62 @@ type SplitMethod = 'proportional' | 'flat';
                       @for (item of orderItems(); track $index) {
                         <tr>
                           <td class="buyer-cell">
-                            <div class="store-tag">{{ item.storeName }}</div>
+                            <div class="store-tag" [matTooltip]="item.storeName">{{ item.storeName }}</div>
                             {{ item.buyer }}
                           </td>
                           <td>
                             <div class="item-name-group">
-                              <span class="item-title">{{ item.itemName }}</span>
+                              <div class="title-row">
+                                <span class="item-title">{{ item.itemName }}</span>
+                                @if (productSettings()[item.itemName]?.isBogo) {
+                                  <span class="badge badge-bogo">買一送一 BOGO</span>
+                                }
+                                @if (productSettings()[item.itemName]?.isGift) {
+                                  <span class="badge badge-gift">贈品 GIFT</span>
+                                }
+                                @if (item.explicitDiscount > 0) {
+                                  <span class="discount-chip"
+                                    matTooltip="Uber 系統在此品項上已套用折扣（如買一送一、百分比折扣），應付金額已反映此折扣">
+                                    已扣 {{ fmt(item.explicitDiscount) }}
+                                  </span>
+                                }
+                              </div>
+                              <div class="product-toggles">
+                                <span class="toggle-label">覆寫屬性:</span>
+                                <button 
+                                  type="button"
+                                  class="badge-toggle-btn bogo-toggle"
+                                  [class.active]="productSettings()[item.itemName]?.isBogo"
+                                  (click)="toggleProductSetting(item.itemName, 'isBogo')"
+                                  matTooltip="手動設定此品項為買一送一 (BOGO)，折扣將由所有購買者公平分攤底價">
+                                  <mat-icon class="toggle-icon">local_offer</mat-icon> 買一送一
+                                </button>
+                                <button 
+                                  type="button"
+                                  class="badge-toggle-btn gift-toggle"
+                                  [class.active]="productSettings()[item.itemName]?.isGift"
+                                  (click)="toggleProductSetting(item.itemName, 'isGift')"
+                                  matTooltip="手動設定此品項為滿額贈品 (GIFT)，原價/底價全免，僅需支付加項費">
+                                  <mat-icon class="toggle-icon">redeem</mat-icon> 贈品
+                                </button>
+
+                                @if (productSettings()[item.itemName]?.isBogo) {
+                                  <div class="limit-wrapper">
+                                    <span class="limit-label">限額:</span>
+                                    <input 
+                                      type="number" 
+                                      class="limit-input"
+                                      placeholder="無上限"
+                                      [ngModel]="productSettings()[item.itemName]?.bogoLimit"
+                                      (ngModelChange)="updateBogoLimit(item.itemName, $event)"
+                                      min="1"
+                                      matTooltip="買一送一最大免費杯數（例如：上限10組請輸入10）"
+                                    />
+                                    <span class="limit-unit">組</span>
+                                  </div>
+                                }
+                              </div>
                             </div>
-                            @if (item.explicitDiscount > 0) {
-                              <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
-                            }
                           </td>
                           <td class="center">{{ item.quantity }}</td>
                           <td class="right">{{ fmt(item.price) }}</td>
@@ -294,16 +316,7 @@ type SplitMethod = 'proportional' | 'flat';
                               min="0"
                             />
                           </td>
-                          <td class="center">
-                            <select class="group-select" 
-                                    [ngModel]="item.discountGroup" 
-                                    (ngModelChange)="updateItemOption($index, 'discountGroup', $event)">
-                              <option [ngValue]="null">無</option>
-                              @for (g of availableGroups; track g) {
-                                <option [ngValue]="g">{{ g }}</option>
-                              }
-                            </select>
-                          </td>
+
                           <td class="right payable">
                             {{ fmt(item.finalPayable) }}
                           </td>
@@ -320,6 +333,31 @@ type SplitMethod = 'proportional' | 'flat';
                 </button>
               </mat-card-actions>
             </mat-card>
+ 
+            <!-- 每人小計 -->
+            <mat-card appearance="outlined" class="summary-card">
+              <mat-card-header>
+                <mat-icon mat-card-avatar>people</mat-icon>
+                <mat-card-title>每人應付小計</mat-card-title>
+                <mat-card-subtitle>各成員在本次訂單中的應付總金額</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <div class="summary-grid">
+                  @for (entry of buyerSummary(); track entry.buyer) {
+                    <div class="summary-item">
+                      <div class="summary-buyer">
+                        <span class="summary-store">{{ entry.storeName }}</span>
+                        <span class="summary-name">{{ entry.buyer }}</span>
+                      </div>
+                      <div class="summary-right">
+                        <span class="summary-items">{{ entry.itemCount }} 件</span>
+                        <span class="summary-amount">{{ fmt(entry.total) }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </mat-card-content>
+            </mat-card>
           } @else {
             <!-- 卡片模式 -->
             <div class="card-grid">
@@ -327,17 +365,59 @@ type SplitMethod = 'proportional' | 'flat';
                 <mat-card appearance="outlined" class="item-card">
                   <div class="item-card-header">
                     <div class="item-card-buyer">
-                      <span class="store-tag">{{ item.storeName }}</span>
+                      <span class="store-tag" [matTooltip]="item.storeName">{{ item.storeName }}</span>
                       {{ item.buyer }}
                     </div>
                     <div class="item-card-payable">{{ fmt(item.finalPayable) }}</div>
                   </div>
                   <div class="item-card-content">
                     <div class="item-card-title">
-                      {{ item.itemName }}
-                      @if (item.explicitDiscount > 0) {
-                        <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
-                      }
+                      <div class="title-row">
+                        <span class="item-title">{{ item.itemName }}</span>
+                        @if (productSettings()[item.itemName]?.isBogo) {
+                          <span class="badge badge-bogo">買一送一 BOGO</span>
+                        }
+                        @if (productSettings()[item.itemName]?.isGift) {
+                          <span class="badge badge-gift">贈品 GIFT</span>
+                        }
+                        @if (item.explicitDiscount > 0) {
+                          <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
+                        }
+                      </div>
+                      <div class="product-toggles card-toggles">
+                        <button 
+                          type="button"
+                          class="badge-toggle-btn bogo-toggle"
+                          [class.active]="productSettings()[item.itemName]?.isBogo"
+                          (click)="toggleProductSetting(item.itemName, 'isBogo')"
+                          matTooltip="手動設定此品項為買一送一 (BOGO)">
+                          <mat-icon class="toggle-icon">local_offer</mat-icon> BOGO
+                        </button>
+                        <button 
+                          type="button"
+                          class="badge-toggle-btn gift-toggle"
+                          [class.active]="productSettings()[item.itemName]?.isGift"
+                          (click)="toggleProductSetting(item.itemName, 'isGift')"
+                          matTooltip="手動設定此品項為滿額贈品 (GIFT)">
+                          <mat-icon class="toggle-icon">redeem</mat-icon> 贈品
+                        </button>
+
+                        @if (productSettings()[item.itemName]?.isBogo) {
+                          <div class="limit-wrapper">
+                            <span class="limit-label">限額:</span>
+                            <input 
+                              type="number" 
+                              class="limit-input"
+                              placeholder="無上限"
+                              [ngModel]="productSettings()[item.itemName]?.bogoLimit"
+                              (ngModelChange)="updateBogoLimit(item.itemName, $event)"
+                              min="1"
+                              matTooltip="買一送一最大免費杯數（例如：上限10組請輸入10）"
+                            />
+                            <span class="limit-unit">組</span>
+                          </div>
+                        }
+                      </div>
                     </div>
                     <div class="item-card-details">
                       <span>數量: {{ item.quantity }}</span>
@@ -355,17 +435,7 @@ type SplitMethod = 'proportional' | 'flat';
                           min="0"
                         />
                       </div>
-                      <div>
-                        <span class="card-input-label">折扣群組</span>
-                        <select class="group-select" 
-                                [ngModel]="item.discountGroup" 
-                                (ngModelChange)="updateItemOption($index, 'discountGroup', $event)">
-                          <option [ngValue]="null">無</option>
-                          @for (g of availableGroups; track g) {
-                            <option [ngValue]="g">{{ g }}</option>
-                          }
-                        </select>
-                      </div>
+
                     </div>
                   </div>
                 </mat-card>
@@ -387,8 +457,22 @@ type SplitMethod = 'proportional' | 'flat';
     .input-card { margin-bottom: 24px; border-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 20%, transparent); }
     .full-width { width: 100%; }
     .json-field { margin-top: 8px; }
-    .error-hint { color: var(--mat-sys-error, #f44336); display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.9rem; margin-top: 8px; }
-
+    
+    .error-container { 
+      margin-top: 12px; padding: 12px; 
+      background: color-mix(in srgb, var(--mat-sys-error) 5%, transparent); 
+      border: 1px solid color-mix(in srgb, var(--mat-sys-error) 20%, transparent); 
+      border-radius: 8px; 
+    }
+    .error-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .spacer { flex: 1; }
+    .error-hint { color: var(--mat-sys-error); display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.95rem; margin: 0; }
+    .error-detail { 
+      background: #1e1e1e; color: #f87171; padding: 10px; border-radius: 6px; 
+      font-family: 'Roboto Mono', monospace; font-size: 0.8rem; overflow-x: auto; 
+      white-space: pre; line-height: 1.4; border: 1px solid #450a0a; 
+    }
+ 
     .store-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
     .header-actions { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
     .store-items { display: flex; flex-direction: column; gap: 8px; }
@@ -397,55 +481,360 @@ type SplitMethod = 'proportional' | 'flat';
     .config-card { margin-bottom: 20px; }
     .config-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding-top: 8px; }
     .config-field { flex: 1; min-width: 160px; }
-    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin-bottom: 16px; }
-    .stat-card { background: color-mix(in srgb, currentColor 4%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); border-radius: 12px; padding: 16px; text-align: center; }
-    .stat-card.accent { background: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 5%, transparent); }
-    .stat-card.highlight { background: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 6%, transparent); border-color: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 20%, transparent); }
-    .stat-label { display: block; font-size: 0.75rem; opacity: 0.6; margin-bottom: 6px; }
-    .stat-value { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .stat-value.positive { color: #16a34a; }
-    .stat-value.negative { color: var(--mat-sys-error, #d32f2f); }
-    .stat-value.primary { color: var(--mat-sys-primary, #1976d2); }
-    .balance-warning { display: flex; align-items: center; gap: 8px; background: color-mix(in srgb, #f59e0b 10%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent); color: #b45309; border-radius: 8px; padding: 12px 16px; font-size: 0.875rem; margin-bottom: 16px; }
+    
+    /* Stats Row & Cards Modern Glassmorphic Styling */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
+    .stat-card { 
+      background: var(--surface-color); 
+      border: 1px solid var(--border-color); 
+      border-radius: 16px; 
+      padding: 20px; 
+      text-align: center; 
+      box-shadow: var(--card-shadow);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 20px -8px rgb(0 0 0 / 0.12);
+    }
+    .stat-card.accent { 
+      background: color-mix(in srgb, var(--accent-color) 4%, var(--surface-color)); 
+      border-color: color-mix(in srgb, var(--accent-color) 20%, var(--border-color)); 
+    }
+    .stat-card.highlight { 
+      background: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 4%, var(--surface-color)); 
+      border-color: color-mix(in srgb, var(--mat-sys-tertiary, #6750a4) 20%, var(--border-color)); 
+    }
+    .stat-card.warn { 
+      background: color-mix(in srgb, #eab308 4%, var(--surface-color)); 
+      border-color: color-mix(in srgb, #eab308 20%, var(--border-color)); 
+    }
+    .stat-label { display: block; font-size: 0.75rem; opacity: 0.6; margin-bottom: 6px; cursor: default; }
+    .stat-value { font-size: 1.45rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .stat-value.positive { color: #10b981; }
+    .stat-value.positive-warn { color: #d97706; }
+    .stat-value.negative { color: var(--mat-sys-error, #ef4444); }
+    .stat-value.primary { color: var(--accent-color); }
+    
+    /* Balance Warning Premium Adaptive Palette */
+    .balance-warning { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+      flex-wrap: wrap; 
+      background: #fffbeb; 
+      border: 1px solid #fde68a; 
+      color: #b45309; 
+      border-radius: 12px; 
+      padding: 14px 20px; 
+      font-size: 0.875rem; 
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(245, 158, 11, 0.03);
+    }
+    :host-context(html.dark-theme) .balance-warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.2);
+      color: #fef08a;
+    }
+    .balance-warning span { flex: 1; min-width: 200px; }
+    .smart-btn { 
+      white-space: nowrap; 
+      color: #b45309 !important; 
+      border-color: #fde68a !important; 
+      background: transparent !important;
+    }
+    :host-context(html.dark-theme) .smart-btn {
+      color: #fef08a !important;
+      border-color: rgba(245, 158, 11, 0.3) !important;
+    }
+    
+    .summary-card { margin-top: 20px; }
+    .summary-grid { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+    .summary-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; transition: background 0.15s; }
+    .summary-item:hover { background: var(--surface-alt); }
+    .summary-buyer { display: flex; flex-direction: column; gap: 2px; }
+    .summary-store { font-size: 0.65rem; opacity: 0.45; }
+    .summary-name { font-weight: 600; font-size: 0.95rem; }
+    .summary-right { display: flex; align-items: center; gap: 16px; }
+    .summary-items { font-size: 0.8rem; opacity: 0.5; }
+    .summary-amount { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent-color); min-width: 80px; text-align: right; }
+    
     .table-card { margin-bottom: 24px; }
     .table-wrapper { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+    
+    /* Elegant Clean Table Styles */
     .order-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 600px; }
-    .order-table th, .order-table td { padding: 12px 14px; border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent); text-align: left; }
-    .order-table th { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; opacity: 0.6; }
+    .order-table th { 
+      font-size: 0.75rem; 
+      font-weight: 600; 
+      text-transform: uppercase; 
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      border-bottom: 2px solid var(--border-color);
+      padding: 14px 16px;
+      opacity: 0.8;
+    }
+    .order-table td { 
+      padding: 16px; 
+      border-bottom: 1px solid var(--border-color); 
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
     .center { text-align: center; }
     .right { text-align: right; font-variant-numeric: tabular-nums; }
-    .buyer-cell { font-weight: 500; }
-    .store-tag { font-size: 0.65rem; opacity: 0.5; font-weight: 400; }
-    .inline-input { width: 60px; background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); color: inherit; border-radius: 4px; padding: 2px 4px; text-align: right; outline: none; }
+    .buyer-cell { font-weight: 600; }
     
-    .group-card { margin-bottom: 20px; border-color: color-mix(in srgb, var(--mat-sys-primary, #1976d2) 30%, transparent); }
-    .group-configs { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
-    .group-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: color-mix(in srgb, currentColor 3%, transparent); padding: 12px 16px; border-radius: 8px; }
-    .group-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 280px; }
-    .group-badge { background: var(--mat-sys-primary, #1976d2); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
-    .group-stats { font-size: 0.85rem; opacity: 0.8; }
-    .group-action { display: flex; align-items: center; gap: 12px; }
-    .group-discount-field { width: 160px; margin-bottom: -1.34375em; }
-    .group-select { padding: 4px 8px; border-radius: 4px; font-family: inherit; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); color: inherit; outline: none; }
-
-    .discount-chip { display: inline-block; background: #fbbf24; color: #78350f; font-size: 0.72rem; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
-    .payable { font-weight: 700; color: var(--mat-sys-primary, #1976d2); }
+    /* Truncated & Hover-Tooltip Store Tag */
+    .store-tag { 
+      font-size: 0.65rem; 
+      opacity: 0.6; 
+      font-weight: 500;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 2px;
+      display: block;
+      cursor: help;
+    }
+    
+    /* Premium Inline Inputs */
+    .inline-input { 
+      width: 72px; 
+      background: var(--surface-alt); 
+      border: 1px solid var(--border-color); 
+      color: var(--text-primary); 
+      border-radius: 8px; 
+      padding: 4px 8px; 
+      text-align: right; 
+      outline: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: 'Roboto Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.875rem;
+    }
+    .inline-input:hover {
+      background: color-mix(in srgb, var(--surface-alt) 85%, var(--text-muted));
+      border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-muted));
+    }
+    .inline-input:focus {
+      background: var(--surface-color);
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 15%, transparent);
+    }
+    .inline-input::-webkit-outer-spin-button,
+    .inline-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .inline-input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    
+    /* Premium Soft Amber Discount Chip */
+    .discount-chip { 
+      display: inline-block; 
+      background: #fef3c7; 
+      color: #b45309; 
+      border: 1px solid #fde68a;
+      font-size: 0.72rem; 
+      padding: 1.5px 8px; 
+      border-radius: 999px; 
+      margin-left: 6px; 
+      vertical-align: middle;
+      font-weight: 600;
+    }
+    :host-context(html.dark-theme) .discount-chip {
+      background: rgba(245, 158, 11, 0.15); 
+      color: #fbbf24; 
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    
+    .payable { font-weight: 700; color: var(--accent-color); font-size: 0.95rem; }
     .item-name-group { display: flex; flex-direction: column; gap: 2px; }
     .item-title { font-weight: 500; }
     .help-icon { font-size: 0.85em; opacity: 0.5; vertical-align: middle; }
-
+ 
     /* 卡片模式樣式 */
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
-    .item-card { border-radius: 12px; transition: transform 0.2s; border: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+    .item-card { border-radius: 12px; transition: transform 0.2s; border: 1px solid var(--border-color); }
     .item-card:hover { transform: translateY(-2px); }
-    .item-card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid color-mix(in srgb, currentColor 5%, transparent); }
+    .item-card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
     .item-card-buyer { display: flex; flex-direction: column; font-weight: 600; }
-    .item-card-payable { font-size: 1.2rem; font-weight: 800; color: var(--mat-sys-primary, #1976d2); }
+    .item-card-payable { font-size: 1.2rem; font-weight: 800; color: var(--accent-color); }
     .item-card-content { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
     .item-card-title { font-weight: 500; font-size: 1.05rem; }
     .item-card-details { display: flex; gap: 12px; font-size: 0.85rem; opacity: 0.7; }
-    .item-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, currentColor 10%, transparent); }
+    .item-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border-color); }
     .card-input-label { font-size: 0.75rem; opacity: 0.6; margin-bottom: 4px; display: block; }
+
+    /* 買一送一與贈品徽章及切換樣式 */
+    .title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+    
+    .badge { 
+      display: inline-flex; 
+      align-items: center; 
+      font-size: 0.7rem; 
+      font-weight: 700; 
+      padding: 2.5px 8px; 
+      border-radius: 6px; 
+      text-transform: uppercase; 
+      letter-spacing: 0.05em; 
+    }
+    .badge-bogo { 
+      background: #e6f4ea; 
+      color: #137333; 
+      border: 1px solid rgba(16, 185, 129, 0.2); 
+    }
+    :host-context(html.dark-theme) .badge-bogo {
+      background: rgba(16, 185, 129, 0.15); 
+      color: #34d399; 
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    .badge-gift { 
+      background: #f3e8fd; 
+      color: #7627d3; 
+      border: 1px solid rgba(139, 92, 246, 0.2); 
+    }
+    :host-context(html.dark-theme) .badge-gift {
+      background: rgba(139, 92, 246, 0.15); 
+      color: #a78bfa; 
+      border-color: rgba(139, 92, 246, 0.3);
+    }
+    
+    /* Flex Container & Prevention of Toggle Wrapping */
+    .product-toggles { 
+      display: flex; 
+      align-items: center; 
+      gap: 6px 10px; 
+      margin-top: 6px; 
+      font-size: 0.75rem; 
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+    .toggle-label { font-weight: 500; font-size: 0.72rem; }
+    .badge-toggle-btn { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: 4px; 
+      font-size: 0.72rem; 
+      font-weight: 600; 
+      padding: 3.5px 10px; 
+      border-radius: 6px; 
+      border: 1px solid var(--border-color); 
+      background: var(--surface-color); 
+      color: var(--text-secondary); 
+      cursor: pointer; 
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      white-space: nowrap;
+    }
+    .badge-toggle-btn:hover { 
+      background: var(--surface-alt); 
+      border-color: color-mix(in srgb, var(--text-muted) 50%, transparent);
+      color: var(--text-primary);
+    }
+    .badge-toggle-btn .toggle-icon { font-size: 14px; width: 14px; height: 14px; min-width: 14px; min-height: 14px; display: inline-block; vertical-align: middle; }
+    
+    /* 啟動狀態的 BOGO 按鈕 - 高對比度、主題自適應 */
+    .badge-toggle-btn.bogo-toggle.active { 
+      background: #e6f4ea; 
+      color: #059669; 
+      border-color: rgba(16, 185, 129, 0.3); 
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.08);
+    }
+    .badge-toggle-btn.bogo-toggle.active:hover {
+      background: #d1fae5;
+    }
+    :host-context(html.dark-theme) .badge-toggle-btn.bogo-toggle.active { 
+      background: rgba(16, 185, 129, 0.2); 
+      color: #34d399; 
+      border-color: rgba(16, 185, 129, 0.4); 
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+    }
+    :host-context(html.dark-theme) .badge-toggle-btn.bogo-toggle.active:hover {
+      background: rgba(16, 185, 129, 0.28);
+    }
+    
+    /* 啟動狀態的 GIFT 按鈕 - 高對比度、主題自適應 */
+    .badge-toggle-btn.gift-toggle.active { 
+      background: #f3e8fd; 
+      color: #7c3aed; 
+      border-color: rgba(139, 92, 246, 0.3); 
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.08);
+    }
+    .badge-toggle-btn.gift-toggle.active:hover {
+      background: #ede9fe;
+    }
+    :host-context(html.dark-theme) .badge-toggle-btn.gift-toggle.active { 
+      background: rgba(139, 92, 246, 0.2); 
+      color: #a78bfa; 
+      border-color: rgba(139, 92, 246, 0.4); 
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
+    }
+    :host-context(html.dark-theme) .badge-toggle-btn.gift-toggle.active:hover {
+      background: rgba(139, 92, 246, 0.28);
+    }
+
+    .card-toggles { margin-top: 8px; justify-content: flex-start; }
+    .limit-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--surface-alt);
+      padding: 3.5px 10px;
+      border-radius: 6px;
+      border: 1px dashed var(--border-color);
+      margin-left: 0;
+      vertical-align: middle;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .limit-wrapper:hover {
+      background: color-mix(in srgb, var(--surface-alt) 80%, var(--text-muted));
+      border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-muted));
+    }
+    .limit-label {
+      font-size: 0.72rem;
+      opacity: 0.8;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .limit-input {
+      width: 36px;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-size: 0.8rem;
+      text-align: center;
+      outline: none;
+      padding: 0 2px;
+      font-weight: 700;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-family: 'Roboto Mono', monospace;
+    }
+    .limit-input:hover {
+      border-bottom-color: color-mix(in srgb, var(--border-color) 50%, var(--text-muted));
+    }
+    .limit-input:focus {
+      border-bottom-color: var(--accent-color);
+      border-bottom-width: 2px;
+      padding-bottom: 0px; 
+    }
+    .limit-input::-webkit-outer-spin-button,
+    .limit-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .limit-input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    .limit-unit {
+      font-size: 0.72rem;
+      opacity: 0.8;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
   `],
 })
 export class UberEatsSettlementComponent {
@@ -453,9 +842,12 @@ export class UberEatsSettlementComponent {
 
   rawJson = '';
   parseError = signal('');
-  viewMode = signal<'table' | 'card'>('table');
+  parseErrorDetail = signal('');
+  canRepair = signal(false);
   parsedOrders = signal<ParsedOrderSummary[]>([]);
   orderItems = signal<OrderItem[]>([]);
+  viewMode = signal<'table' | 'card'>('table');
+  productSettings = signal<Record<string, ProductSetting>>({});
 
   readonly _jsonTotal = computed(() => {
     return this.parsedOrders().reduce((sum, o) => sum + o.jsonTotal, 0);
@@ -465,246 +857,420 @@ export class UberEatsSettlementComponent {
   deliveryFee = 0;
   splitMethod: SplitMethod = 'proportional';
 
-  // ─── 群組折扣設定 ────────────────────────────────────────────────────────
-  availableGroups = ['A', 'B', 'C', 'D', 'E'];
-  discountGroups = signal<DiscountGroupConfig[]>([]);
-
-  readonly activeGroups = computed(() => {
-    const items = this.orderItems();
-    const groupSet = new Set<string>();
-    items.forEach(i => {
-      if (i.discountGroup) groupSet.add(i.discountGroup);
-    });
-    return Array.from(groupSet).sort();
-  });
-
   readonly stats = computed(() => {
     const items = this.orderItems();
     const jsonTotal = this._jsonTotal();
-    let itemSum = 0;
     let checkSum = 0;
-    items.forEach(i => {
-      itemSum += (i.price - i.explicitDiscount);
-      checkSum += i.finalPayable;
+    items.forEach(i => { checkSum += i.finalPayable; });
+    // discrepancy = Uber 實付 - 我們的對帳總和
+    // 正數：我們算少了（可能有未分配的費用）
+    // 負數：我們算多了（可能有未輸入的折扣）
+    return { jsonTotal, discrepancy: jsonTotal - checkSum, checkSum };
+  });
+
+  readonly buyerSummary = computed(() => {
+    const map = new Map<string, { buyer: string, storeName: string, total: number, itemCount: number }>();
+    this.orderItems().forEach(item => {
+      const key = `${item.storeName}|${item.buyer}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.total += item.finalPayable;
+        existing.itemCount += item.quantity;
+      } else {
+        map.set(key, { buyer: item.buyer, storeName: item.storeName, total: item.finalPayable, itemCount: item.quantity });
+      }
     });
-    return { itemSum, jsonTotal, discrepancy: itemSum - jsonTotal, checkSum };
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
   });
 
   readonly showBalanceWarning = computed(
-    () => Math.abs(this.stats().checkSum - this.stats().jsonTotal) > 0.5 && this.orderItems().length > 0
+    () => Math.abs(this.stats().discrepancy) > 0.5 && this.orderItems().length > 0
   );
+
+  readonly Math = Math;
 
   parseJson(append = false): void {
     this.parseError.set('');
+    this.parseErrorDetail.set('');
+    this.canRepair.set(false);
+    
+    if (!this.rawJson.trim()) return;
+
+    // 預先偵測雜質
+    if (/[\u00A0\u0000-\u001F\u007F-\u009F]/.test(this.rawJson)) {
+      this.canRepair.set(true);
+    }
+
     try {
       const data = JSON.parse(this.rawJson);
       this.processData(data, append);
       this.rawJson = '';
-    } catch {
-      this.parseError.set('JSON 格式錯誤，請確認貼上的內容正確無誤。');
+    } catch (e) {
+      const err = e as Error;
+      this.parseError.set('JSON 格式錯誤，可能包含隱形雜質。');
+      
+      // 擷取錯誤片段 (使用剛剛在 Formatter 驗證過的邏輯)
+      const posMatch = err.message.match(/at position (\d+)/);
+      const lcMatch = err.message.match(/at line (\d+) column (\d+)/);
+      let pos = -1;
+      if (posMatch) pos = parseInt(posMatch[1], 10);
+      else if (lcMatch) pos = this.getPosFromLineCol(this.rawJson, parseInt(lcMatch[1], 10), parseInt(lcMatch[2], 10));
+
+      if (pos >= 0) {
+        this.parseErrorDetail.set(this.generateErrorSnippet(this.rawJson, pos, err.message));
+      } else {
+        this.parseErrorDetail.set(err.message);
+      }
     }
+  }
+
+  repairJson(): void {
+    const cleaned = this.rawJson
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+      .replace(/\u00A0/g, " ");
+    this.rawJson = cleaned;
+    this.parseJson(false);
+    this.snackBar.open('已自動修復雜質並重新解析', '確定', { duration: 2000 });
+  }
+
+  private getPosFromLineCol(text: string, line: number, col: number): number {
+    const lines = text.split('\n');
+    let pos = 0;
+    for (let i = 0; i < line - 1; i++) pos += lines[i].length + 1;
+    return pos + col - 1;
+  }
+
+  private generateErrorSnippet(json: string, pos: number, message: string): string {
+    const start = Math.max(0, pos - 20);
+    const end = Math.min(json.length, pos + 20);
+    const visualize = (str: string) => str.replace(/\n/g, '↵').replace(/\u00A0/g, '[NBSP]');
+    const snippet = visualize(json.substring(start, end));
+    const prefix = visualize(json.substring(start, pos));
+    return `${snippet}\n${' '.repeat(prefix.length)}^`;
   }
 
   private processData(jsonData: unknown, append: boolean): void {
     try {
       const data = jsonData as Record<string, unknown>;
-      const orders = (data['data'] as Record<string, unknown>)['orders'] as unknown[];
-      const order = orders[0] as Record<string, unknown>;
+      const orders = (data['data'] as Record<string, unknown>)?.['orders'] as unknown[];
       
-      const orderUUID = order['uuid'] as string || `uuid-${Date.now()}`;
-      if (append && this.parsedOrders().some(o => o.uuid === orderUUID)) {
-        this.parseError.set('⚠️ 此訂單已經存在於列表中，已忽略重複載入。');
-        return;
+      if (!orders || !Array.isArray(orders)) {
+        throw new Error('找不到 orders 資料');
       }
 
-      const feedCards = order['feedCards'] as Array<Record<string, unknown>>;
-      const summaryCard = feedCards.find(c => c['orderSummary']) as Record<string, unknown> | undefined;
-      if (!summaryCard) throw new Error('找不到 orderSummary 資料');
+      const allNewOrderSummaries: ParsedOrderSummary[] = [];
+      const allNewItems: OrderItem[] = [];
 
-      const analytics = order['analytics'] as Record<string, unknown>;
-      const analyticsData = analytics['data'] as Record<string, unknown>;
-      const jsonTotal = parseFloat(analyticsData['order_total'] as string) || 0;
+      orders.forEach((orderData, idx) => {
+        const order = orderData as Record<string, unknown>;
+        const orderUUID = order['uuid'] as string || `uuid-${Date.now()}-${idx}`;
+        
+        // 避免重複載入同一張訂單
+        if (this.parsedOrders().some(o => o.uuid === orderUUID)) return;
 
-      const orderInfo = order['orderInfo'] as Record<string, unknown>;
-      const storeInfo = orderInfo['storeInfo'] as Record<string, unknown>;
-      let storeName = storeInfo['name'] as string || '未知店家';
-      
-      const activeOrderOverview = order['activeOrderOverview'] as Record<string, unknown> | undefined;
-      const tertiaryInfo = activeOrderOverview?.['tertiaryInfo'] as Record<string, unknown> | undefined;
-      const groupOrderName = tertiaryInfo?.['title'] as string | undefined;
-      if (groupOrderName && typeof groupOrderName === 'string') {
-        storeName += ` [${groupOrderName}]`;
-      }
+        const feedCards = (order['feedCards'] as Array<Record<string, unknown>>) || [];
+        const summaryCard = feedCards.find(c => c['orderSummary']) as Record<string, unknown> | undefined;
+        if (!summaryCard) return;
 
-      const activeStatus = order['activeOrderStatus'] as Record<string, unknown> | undefined;
-      const subtitleSummary = activeStatus?.['subtitleSummary'] as Record<string, unknown> | undefined;
-      const summary = subtitleSummary?.['summary'] as any;
-      const status = typeof summary === 'string' ? summary : (summary?.['text'] || '');
+        const analytics = order['analytics'] as Record<string, unknown>;
+        const analyticsData = (analytics?.['data'] as Record<string, unknown>) || {};
+        const jsonTotal = parseFloat(analyticsData['order_total'] as string) || 0;
 
-      const orderSummary = summaryCard['orderSummary'] as Record<string, unknown>;
-      const parsed = this.parseSections(orderSummary['sections'] as Array<Record<string, unknown>>, storeName);
-      
-      const newOrderSummary: ParsedOrderSummary = {
-        uuid: orderUUID,
-        storeName,
-        status,
-        jsonTotal
-      };
+        const orderInfo = (order['orderInfo'] as Record<string, unknown>) || {};
+        const storeInfo = (orderInfo['storeInfo'] as Record<string, unknown>) || {};
+        let storeName = (storeInfo['name'] as string) || '未知店家';
+        
+        const activeOrderOverview = order['activeOrderOverview'] as Record<string, unknown> | undefined;
+        const tertiaryInfo = activeOrderOverview?.['tertiaryInfo'] as Record<string, unknown> | undefined;
+        const groupOrderName = tertiaryInfo?.['title'] as string | undefined;
+        if (groupOrderName) storeName += ` [${groupOrderName}]`;
+
+        const activeStatus = order['activeOrderStatus'] as Record<string, unknown> | undefined;
+        const subtitleSummary = activeStatus?.['subtitleSummary'] as Record<string, unknown> | undefined;
+        const summary = subtitleSummary?.['summary'] as any;
+        let status = typeof summary === 'string' ? summary : (summary?.['text'] || '');
+        // 移除 HTML 標籤
+        status = status.replace(/<[^>]*>/g, '').trim();
+
+        const orderSummary = summaryCard['orderSummary'] as Record<string, unknown>;
+        const parsed = this.parseSections(orderSummary['sections'] as Array<Record<string, unknown>>, storeName);
+        
+        allNewOrderSummaries.push({ uuid: orderUUID, storeName, status, jsonTotal });
+        allNewItems.push(...parsed);
+      });
 
       if (append) {
-        this.parsedOrders.set([...this.parsedOrders(), newOrderSummary]);
-        this.orderItems.set([...this.orderItems(), ...parsed]);
+        this.parsedOrders.set([...this.parsedOrders(), ...allNewOrderSummaries]);
+        const mergedItems = [...this.orderItems(), ...allNewItems];
+        this.performAutoDetection(mergedItems);
+        this.orderItems.set(mergedItems);
       } else {
-        this.parsedOrders.set([newOrderSummary]);
-        this.orderItems.set(parsed);
+        this.parsedOrders.set(allNewOrderSummaries);
+        this.performAutoDetection(allNewItems);
+        this.orderItems.set(allNewItems);
       }
       this.recalculate();
     } catch (err) {
-      this.parseError.set(`解析失敗：${(err as Error).message}`);
+      console.error('Data Processing Error:', err);
+      this.parseError.set('解析訂單內容時發生錯誤，請確認 JSON 結構符合預期。');
     }
   }
 
   private parseSections(sections: Array<Record<string, unknown>>, storeName: string): OrderItem[] {
     const results: OrderItem[] = [];
+    if (!sections) return results;
+
     sections.forEach(section => {
-      const header = section['header'] as Record<string, unknown>;
-      const buyer = header['title'] as string;
-      const items = section['items'] as Array<Record<string, unknown>>;
+      const header = (section['header'] as Record<string, unknown>) || {};
+      const buyer = (header['title'] as string) || '未知參與者';
+      const items = (section['items'] as Array<Record<string, unknown>>) || [];
+      
       items.forEach(item => {
-        const price = parseFloat(((item['price'] as string) || '$0').replace(/[^\d.]/g, '')) || 0;
+        // 1. 原始標價
+        const rawPriceStr = (item['price'] as string) || '$0';
+        const originalPrice = parseFloat(rawPriceStr.replace(/[^\d.]/g, '')) || 0;
+        
+        // 2. 從 subtitle 提取加料金額
         const subtitle = (item['subtitle'] as string) || '';
-        let customizationPrice = 0;
-        const priceMatches = subtitle.matchAll(/\(\$\s*(\d+\.?\d*)\s*\)/g);
-        for (const match of priceMatches) {
-          customizationPrice += parseFloat(match[1]);
+        let unitCustomization = 0;
+        const customMatches = subtitle.match(/\(\$(\d+\.?\d*)\)/g);
+        if (customMatches) {
+          customMatches.forEach(m => {
+            unitCustomization += parseFloat(m.replace(/[^\d.]/g, '')) || 0;
+          });
         }
+
+        const quantity = (item['quantity'] as number) || 1;
+        const totalCustomizationPrice = unitCustomization * quantity;
+        const totalBasePrice = originalPrice - totalCustomizationPrice;
+        const unitBasePrice = quantity > 0 ? totalBasePrice / quantity : 0;
+
+        // 3. 折扣判斷
         const discountObj = item['itemDiscount'] as Record<string, unknown> | undefined;
-        const explicitDiscount = discountObj ? parseFloat(((discountObj['formattedAmount'] as string) || '0').replace(/[^\d.]/g, '')) || 0 : 0;
+        let finalPayablePrice = originalPrice;
+        let explicitDiscount = 0;
+
+        if (discountObj) {
+          const discountVal = parseFloat(((discountObj['formattedAmount'] as string) || '0').replace(/[^\d.]/g, ''));
+          
+          // 語意判斷：
+          // Uber 的 itemDiscount 在兩種情境下含義不同：
+          // A) 「最終應付金額」：適用於 8折、滿額送等（如 $120→$96, $80→$10）
+          // B) 「折扣金額」：適用於買一送一等（如 $110-$60=$50/2杯）
+          //
+          // 判斷依據：如果 (原價 - discountVal) 的每杯均價 < $5，
+          // 代表用「折扣金額」算出來不合理，改用「最終應付金額」。
+          const priceAfterDiscount = originalPrice - discountVal;
+          const perUnitAfterDiscount = priceAfterDiscount / quantity;
+
+          if (perUnitAfterDiscount < 5 || priceAfterDiscount < 0) {
+            // 語意 A：discountVal 是「最終應付金額」
+            finalPayablePrice = discountVal;
+            explicitDiscount = originalPrice - discountVal;
+          } else {
+            // 語意 B：discountVal 是「折扣金額」，最終應付 = 原價 - 折扣
+            finalPayablePrice = priceAfterDiscount;
+            explicitDiscount = discountVal;
+          }
+        }
+
         results.push({
           storeName, buyer,
-          itemName: item['title'] as string,
-          quantity: (item['quantity'] as number) || 1,
-          price, customizationPrice, explicitDiscount,
-          discountGroup: null,
-          finalPayable: 0,
+          itemName: (item['title'] as string) || '未名品項',
+          quantity: quantity,
+          price: originalPrice,
+          customizationPrice: totalCustomizationPrice,
+          explicitDiscount,
+          finalPayable: finalPayablePrice,
+          originalPayable: finalPayablePrice,
+          unitBasePrice: unitBasePrice
         });
       });
     });
     return results;
   }
 
-  updateItemOption(index: number, field: 'discountGroup', value: any): void {
-    const items = [...this.orderItems()];
-    items[index] = { ...items[index], [field]: value };
-    this.orderItems.set(items);
-    this.recalculate();
+  performAutoDetection(items: OrderItem[]): void {
+    const titleGroups: Record<string, {
+      totalQty: number;
+      hasDiscountRow: boolean;
+      maxDiscountRatio: number;
+      maxQty: number;
+      maxPrice: number;
+      customizationPrice: number;
+      hasGiftKeyword: boolean;
+      minImpliedPayable: number;
+    }> = {};
+    
+    items.forEach(item => {
+      const title = item.itemName;
+      const isGiftKeyword = /送|贈|gift|free/i.test(title);
+      
+      if (!titleGroups[title]) {
+        titleGroups[title] = {
+          totalQty: 0,
+          hasDiscountRow: false,
+          maxDiscountRatio: 0,
+          maxQty: 0,
+          maxPrice: 0,
+          customizationPrice: 0,
+          hasGiftKeyword: isGiftKeyword,
+          minImpliedPayable: 999999
+        };
+      }
+      
+      const group = titleGroups[title];
+      group.totalQty += item.quantity;
+      if (item.quantity > group.maxQty) {
+        group.maxQty = item.quantity;
+      }
+      if (item.price > group.maxPrice) {
+        group.maxPrice = item.price;
+        group.customizationPrice = item.customizationPrice;
+      }
+      if (item.explicitDiscount > 0) {
+        group.hasDiscountRow = true;
+        const ratio = item.explicitDiscount / item.price;
+        if (ratio > group.maxDiscountRatio) {
+          group.maxDiscountRatio = ratio;
+        }
+      }
+      
+      const impliedPayable = item.price - item.explicitDiscount;
+      if (impliedPayable < group.minImpliedPayable) {
+        group.minImpliedPayable = impliedPayable;
+      }
+    });
+
+    const settings = { ...this.productSettings() };
+
+    Object.keys(titleGroups).forEach(title => {
+      const g = titleGroups[title];
+      
+      if (settings[title]) return;
+
+      let isGift = false;
+      let isBogo = false;
+
+      const isExplicitBaseFree = g.maxQty === 1 && g.hasDiscountRow && Math.abs(g.maxPrice - g.customizationPrice - g.maxDiscountRatio * g.maxPrice) < 0.01;
+      const isCheapImpliedGift = g.maxQty === 1 && g.hasDiscountRow && g.minImpliedPayable < 15;
+      
+      if (g.hasGiftKeyword || isExplicitBaseFree || isCheapImpliedGift) {
+        isGift = true;
+      }
+
+      if (!isGift && g.totalQty >= 2 && g.hasDiscountRow && g.maxDiscountRatio >= 0.4) {
+        isBogo = true;
+      }
+
+      settings[title] = { isBogo, isGift, bogoLimit: null };
+    });
+
+    this.productSettings.set(settings);
   }
 
-  getGroupConfig(groupId: string): DiscountGroupConfig | undefined {
-    return this.discountGroups().find(g => g.groupId === groupId);
-  }
-
-  getGroupManualDiscount(groupId: string): number {
-    return this.getGroupConfig(groupId)?.manualDiscount || 0;
-  }
-
-  getGroupWaivedCups(groupId: string): number {
-    return this.getGroupConfig(groupId)?.waivedCups || 0;
-  }
-
-  updateGroupDiscount(groupId: string, amount: number): void {
-    const groups = [...this.discountGroups()];
-    const idx = groups.findIndex(g => g.groupId === groupId);
-    if (idx >= 0) {
-      groups[idx] = { ...groups[idx], manualDiscount: amount };
+  toggleProductSetting(itemName: string, field: 'isBogo' | 'isGift'): void {
+    const settings = { ...this.productSettings() };
+    const current = settings[itemName] || { isBogo: false, isGift: false, bogoLimit: null };
+    if (field === 'isBogo') {
+      settings[itemName] = { isBogo: !current.isBogo, isGift: false, bogoLimit: current.bogoLimit };
     } else {
-      groups.push({ groupId, manualDiscount: amount, waivedCups: 0 });
+      settings[itemName] = { isBogo: false, isGift: !current.isGift, bogoLimit: null };
     }
-    this.discountGroups.set(groups);
+    this.productSettings.set(settings);
     this.recalculate();
   }
 
-  updateGroupWaivedCups(groupId: string, cups: number): void {
-    const groups = [...this.discountGroups()];
-    const idx = groups.findIndex(g => g.groupId === groupId);
-    if (idx >= 0) {
-      groups[idx] = { ...groups[idx], waivedCups: cups };
-    } else {
-      groups.push({ groupId, manualDiscount: 0, waivedCups: cups });
+  updateBogoLimit(itemName: string, limit: any): void {
+    const settings = { ...this.productSettings() };
+    if (settings[itemName]) {
+      settings[itemName].bogoLimit = limit !== '' && limit !== null ? Math.max(1, Number(limit) || 1) : null;
+      this.productSettings.set(settings);
+      this.recalculate();
     }
-    this.discountGroups.set(groups);
-    this.recalculate();
-  }
-
-  getGroupItems(groupId: string): OrderItem[] {
-    return this.orderItems().filter(i => i.discountGroup === groupId);
-  }
-
-  getGroupItemCount(groupId: string): number {
-    return this.getGroupItems(groupId).reduce((sum, item) => sum + item.quantity, 0);
-  }
-
-  getGroupBasePriceTotal(groupId: string): number {
-    return this.getGroupItems(groupId).reduce((sum, item) => sum + (item.price - item.customizationPrice), 0);
-  }
-
-  getGroupExplicitDiscount(groupId: string): number {
-    return this.getGroupItems(groupId).reduce((sum, item) => sum + item.explicitDiscount, 0);
   }
 
   recalculate(): void {
     const items = this.orderItems();
     if (items.length === 0) return;
 
-    const netAdjustment = this.deliveryFee - this.globalDiscount;
+    // 強制轉型與防禦
+    this.globalDiscount = Math.max(0, Number(this.globalDiscount) || 0);
+    this.deliveryFee = Math.max(0, Number(this.deliveryFee) || 0);
 
-    // 1. 建立群組折扣池
-    const groupContexts = new Map<string, { totalBase: number, totalDiscountToDistribute: number }>();
+    const fee = this.deliveryFee;
+    const discount = this.globalDiscount;
 
-    this.activeGroups().forEach(groupId => {
-      const totalBase = this.getGroupBasePriceTotal(groupId);
-      const itemCount = this.getGroupItemCount(groupId);
-      const explicitDist = this.getGroupExplicitDiscount(groupId);
-      const manualDist = this.getGroupManualDiscount(groupId);
-      const waivedCups = this.getGroupWaivedCups(groupId);
-      
-      let waivedCupsDiscount = 0;
-      if (itemCount > 0 && waivedCups > 0) {
-        waivedCupsDiscount = (totalBase / itemCount) * waivedCups;
+    // 依自定義加價更新單杯底價與原始應付
+    items.forEach(item => {
+      const qty = item.quantity || 1;
+      const custom = Math.max(0, Number(item.customizationPrice) || 0);
+      item.customizationPrice = custom;
+      item.price = item.unitBasePrice * qty + custom;
+      item.originalPayable = Math.max(0, (item.unitBasePrice * qty - item.explicitDiscount) + custom);
+    });
+
+    // 按品項分組統計數量與最高底價，用於計算 BOGO
+    const titleGroups: Record<string, {
+      items: OrderItem[];
+      totalQty: number;
+      maxUnitBase: number;
+    }> = {};
+
+    items.forEach(item => {
+      const title = item.itemName;
+      if (!titleGroups[title]) {
+        titleGroups[title] = { items: [], totalQty: 0, maxUnitBase: item.unitBasePrice };
       }
-
-      groupContexts.set(groupId, {
-        totalBase,
-        totalDiscountToDistribute: explicitDist + manualDist + waivedCupsDiscount
-      });
+      const g = titleGroups[title];
+      g.items.push(item);
+      g.totalQty += item.quantity;
+      if (item.unitBasePrice > g.maxUnitBase) {
+        g.maxUnitBase = item.unitBasePrice;
+      }
     });
 
     let globalBasePoolTotal = 0;
 
-    // 2. 第一階段：計算折扣後的 itemBase
+    // 第一階段：計算 BOGO（含上限）與 Gift 折扣
     const phase1Items = items.map(item => {
       let itemBase = 0;
-      const basePrice = item.price - item.customizationPrice;
+      const setting = this.productSettings()[item.itemName] || { isBogo: false, isGift: false, bogoLimit: null };
 
-      if (item.discountGroup) {
-        const ctx = groupContexts.get(item.discountGroup);
-        if (ctx && ctx.totalBase > 0) {
-          const ratio = basePrice / ctx.totalBase;
-          const discountShare = ctx.totalDiscountToDistribute * ratio;
-          itemBase = basePrice - discountShare + item.customizationPrice;
-        } else {
-          itemBase = item.price - item.explicitDiscount;
+      if (setting.isBogo) {
+        const g = titleGroups[item.itemName];
+        const totalQty = g.totalQty;
+        
+        // 核心數學公式：免費杯數 = 總量的一半 (向下取整)，但不可超過設定之上限
+        let freeCups = Math.floor(totalQty / 2);
+        if (setting.bogoLimit !== null && setting.bogoLimit > 0) {
+          freeCups = Math.min(setting.bogoLimit, freeCups);
         }
+        
+        const totalBogoDiscount = freeCups * g.maxUnitBase;
+        const buyerDiscount = totalQty > 0 ? (item.quantity / totalQty) * totalBogoDiscount : 0;
+        itemBase = item.price - buyerDiscount;
+      } else if (setting.isGift) {
+        itemBase = item.customizationPrice; // 贈品底價免除，僅付加料費
       } else {
-        itemBase = item.price - item.explicitDiscount;
+        itemBase = item.originalPayable; // 一般品項
       }
-      
+
       if (itemBase < 0) itemBase = 0;
       globalBasePoolTotal += itemBase;
       return { originalRef: item, computedItemBase: itemBase };
     });
 
-    // 3. 第二階段：分配全域運費/折扣
+    // 計算已被系統套用的特惠折扣總和
+    const preAppliedDiscountsSum = phase1Items.reduce((sum, { originalRef, computedItemBase }) => {
+      return sum + (originalRef.price - computedItemBase);
+    }, 0);
+
+    // 剩餘的全域折扣進行全域分攤
+    const remainingGlobalDiscount = Math.max(0, discount - preAppliedDiscountsSum);
+    const netAdjustment = fee - remainingGlobalDiscount;
+
+    // 第二階段：分配全域淨調整額 (netAdjustment)
     const updated = phase1Items.map(({ originalRef, computedItemBase }) => {
       let share = 0;
       if (this.splitMethod === 'proportional' && globalBasePoolTotal > 0) {
@@ -713,20 +1279,42 @@ export class UberEatsSettlementComponent {
         share = netAdjustment / items.length;
       }
 
-      return { ...originalRef, finalPayable: computedItemBase + share };
+      return { ...originalRef, finalPayable: Math.max(0, computedItemBase + share) };
     });
 
     this.orderItems.set(updated);
   }
 
+  /** 將差距直接加入全單折扣/運費，使對帳總和與 Uber 實付吻合 */
+  smartDistribute(): void {
+    const { discrepancy } = this.stats();
+    if (discrepancy < 0) {
+      // 我們算多了，需要增加全單折扣
+      this.globalDiscount = Math.round((this.globalDiscount - discrepancy) * 100) / 100;
+    } else {
+      // 我們算少了，需要增加運費/雜費
+      this.deliveryFee = Math.round((this.deliveryFee + discrepancy) * 100) / 100;
+    }
+    this.recalculate();
+    this.snackBar.open('已自動平攤差距至' + (discrepancy < 0 ? '全單折扣' : '運費/雜費'), '', { duration: 2500 });
+  }
+
   exportCsv(): void {
     const items = this.orderItems();
     const stats = this.stats();
-    let csv = '\uFEFF店家,訂購人,品項,數量,原價,加項,群組,應付金額\n';
+    // 每人小計
+    const summary = this.buyerSummary();
+    let csv = '\uFEFF店家,訂購人,品項,數量,原價,加項,應付金額\n';
     items.forEach(item => {
-      csv += `${item.storeName},${item.buyer},"${item.itemName}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.discountGroup || ''},${item.finalPayable.toFixed(2)}\n`;
+      csv += `${item.storeName},${item.buyer},"${item.itemName}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.finalPayable.toFixed(2)}\n`;
     });
-    csv += `\n總計,,,,${stats.itemSum.toFixed(2)},,,${stats.checkSum.toFixed(2)}\n`;
+    csv += `\n對帳總和,,,,,,${stats.checkSum.toFixed(2)}\n`;
+    csv += `Uber 實付,,,,,,${stats.jsonTotal.toFixed(2)}\n`;
+    csv += `\n=== 每人小計 ===\n店家,姓名,件數,應付\n`;
+    summary.forEach(s => {
+      csv += `${s.storeName},${s.buyer},${s.itemCount},${s.total.toFixed(2)}\n`;
+    });
+    csv += `\n總計,,,${stats.checkSum.toFixed(2)}\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -743,7 +1331,6 @@ export class UberEatsSettlementComponent {
     this.parseError.set('');
     this.parsedOrders.set([]);
     this.orderItems.set([]);
-    this.discountGroups.set([]);
     this.globalDiscount = 0;
     this.deliveryFee = 0;
     this.splitMethod = 'proportional';

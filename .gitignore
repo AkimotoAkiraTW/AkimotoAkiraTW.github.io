@@ -33,7 +33,6 @@ bazel-out/
 Thumbs.db
 
 # Personal Data (Excluded for privacy)
-src/assets/data/resume.json
 src/assets/data/portfolio.json
 src/assets/blog/
 !src/assets/blog/index.json

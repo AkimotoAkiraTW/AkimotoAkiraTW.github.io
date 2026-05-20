@@ -2,6 +2,36 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
+:root {
+  color-scheme: light;
+  /* ── Light Mode Design Tokens ── */
+  --bg-color: #f8fafc;          /* Slate-50 */
+  --surface-color: #ffffff;
+  --surface-alt: #f1f5f9;       /* Slate-100 */
+  --text-primary: #1e293b;      /* Slate-800 */
+  --text-secondary: #475569;    /* Slate-600 */
+  --text-muted: #94a3b8;       /* Slate-400 */
+  --border-color: rgba(0, 0, 0, 0.08);
+  --accent-color: #3b82f6;      /* Blue-500 */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+html.dark-theme {
+  color-scheme: dark;
+  /* ── Dark Mode Design Tokens ── */
+  --bg-color: #0f172a;          /* Slate-900 */
+  --surface-color: #1e293b;     /* Slate-800 */
+  --surface-alt: #334155;       /* Slate-700 */
+  --text-primary: #f1f5f9;      /* Slate-100 */
+  --text-secondary: #cbd5e1;    /* Slate-300 */
+  --text-muted: #64748b;       /* Slate-500 */
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent-color: #60a5fa;      /* Blue-400 */
+  --glass-bg: rgba(15, 23, 42, 0.8);
+  --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+}
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -10,7 +40,6 @@
 
 html {
   scroll-behavior: smooth;
-  /* Fluid Typography Base */
   font-size: clamp(14px, 1vw + 10px, 16px);
 }
 
@@ -20,24 +49,18 @@ html, body {
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* 柔和文字預設顏色 (會被 theme 覆寫，但提供基礎值) */
-  color: #2d3748;
 }
 
 body {
   transition: background-color 300ms ease, color 300ms ease;
-  background-color: #f8fafc; /* 更柔和的亮白底色 */
-  color: #334155;            /* Slate-700 護眼深灰 */
+  background-color: var(--bg-color);
+  color: var(--text-primary);
 }
 
-html.dark-theme body {
-  background-color: #0f172a; /* Slate-900 深藍灰底色 */
-  color: #e2e8f0;            /* Slate-200 柔和淺灰字 */
-}
-
-html.dark-theme .mat-mdc-card {
-  background-color: #1e293b !important; /* Slate-800 卡片底色 */
-  border-color: rgba(255, 255, 255, 0.05) !important;
+.mat-mdc-card {
+  background-color: var(--surface-color) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
 }
 
 a {
@@ -59,9 +82,10 @@ img {
 /* ── Angular Material Overrides (極簡圓潤風格) ── */
 .mat-mdc-card {
   border-radius: 16px !important;
-  box-shadow: none !important;
-  border: 1px solid color-mix(in srgb, currentColor 8%, transparent) !important;
-  background-color: var(--mat-card-container-color, #ffffff) !important;
+  box-shadow: var(--card-shadow) !important;
+  border: 1px solid var(--border-color) !important;
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
 }
 
 .mat-mdc-button, .mat-mdc-raised-button, .mat-mdc-stroked-button {
@@ -72,7 +96,8 @@ img {
 .mat-mdc-standard-chip {
   border-radius: 8px !important;
   border: none !important;
-  background-color: color-mix(in srgb, currentColor 5%, transparent) !important;
+  background-color: var(--surface-alt) !important;
+  color: var(--text-secondary) !important;
   font-weight: 500;
 }
 
@@ -90,11 +115,12 @@ img {
   letter-spacing: -0.04em;
   margin-bottom: 12px;
   line-height: 1.2;
+  color: var(--text-primary);
 }
 
 .page-header p {
   font-size: clamp(1rem, 1.5vw, 1.125rem);
-  opacity: 0.6;
+  color: var(--text-secondary);
   max-width: 600px;
   margin: 0 auto;
 }
@@ -113,4 +139,65 @@ img {
 @media (min-width: 1024px) {
   .content-container { padding: 0 56px; }
 }
+
+/* ── Markdown Body ── */
+.markdown-body {
+  color: var(--text-primary);
+  word-wrap: break-word;
+}
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  color: var(--text-primary);
+  margin-top: 2em;
+  margin-bottom: 1em;
+}
+
+.markdown-body p, .markdown-body li {
+  color: var(--text-secondary);
+  margin-bottom: 1em;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid var(--border-color);
+  padding-left: 1em;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.markdown-body code {
+  background: var(--surface-alt);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.9em;
+}
+
+/* ── Premium Number Input Spinner Styling ── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  cursor: pointer;
+  background: transparent;
+  opacity: 0.25;
+  transition: opacity 0.2s ease-in-out;
+  padding: 2px;
+}
+
+input[type="number"]:hover::-webkit-inner-spin-button {
+  opacity: 0.85;
+}
+
+/* ── Hide Spin Buttons inside table/inline number inputs globally ── */
+.inline-input::-webkit-outer-spin-button,
+.inline-input::-webkit-inner-spin-button,
+.limit-input::-webkit-outer-spin-button,
+.limit-input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+.inline-input[type="number"],
+.limit-input[type="number"] {
+  -moz-appearance: textfield !important; /* Firefox */
+}
+
 

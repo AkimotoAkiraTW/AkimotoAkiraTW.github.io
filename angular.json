@@ -1,37 +1,36 @@
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
-  "cli": {
-    "analytics": false
-  },
+  "cli": { "analytics": false },
   "newProjectRoot": "projects",
   "projects": {
-    "portfolio": {
+    "kc-toolkit": {
       "architect": {
         "build": {
           "builder": "@angular/build:application",
           "configurations": {
-            "development": {
-              "extractLicenses": false,
-              "namedChunks": true,
-              "optimization": false,
-              "sourceMap": true
-            },
             "production": {
               "extractLicenses": true,
               "namedChunks": false,
               "optimization": true,
               "outputHashing": "all",
-              "sourceMap": false
+              "sourceMap": false,
+              "serviceWorker": "src/ngsw-config.json"
+            },
+            "development": {
+              "extractLicenses": false,
+              "namedChunks": true,
+              "optimization": false,
+              "sourceMap": true
             }
           },
           "options": {
             "assets": [
-              { "glob": "**/*", "input": "src/assets", "output": "/assets" }
+              { "glob": "**/*", "input": "src/assets", "output": "/assets" },
+              "src/manifest.webmanifest"
             ],
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "outputPath": "dist/portfolio",
-            "polyfills": [],
+            "outputPath": "dist/kc-toolkit",
             "scripts": [
               "node_modules/prismjs/prism.js",
               "node_modules/prismjs/components/prism-typescript.min.js",
@@ -39,7 +38,8 @@
               "node_modules/prismjs/components/prism-css.min.js",
               "node_modules/prismjs/components/prism-scss.min.js",
               "node_modules/prismjs/components/prism-bash.min.js",
-              "node_modules/prismjs/components/prism-json.min.js"
+              "node_modules/prismjs/components/prism-json.min.js",
+              "node_modules/mermaid/dist/mermaid.min.js"
             ],
             "styles": [
               "src/styles/_theme.scss",
@@ -52,12 +52,8 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "development": {
-              "buildTarget": "portfolio:build:development"
-            },
-            "production": {
-              "buildTarget": "portfolio:build:production"
-            }
+            "development": { "buildTarget": "kc-toolkit:build:development" },
+            "production": { "buildTarget": "kc-toolkit:build:production" }
           },
           "defaultConfiguration": "development"
         }
@@ -65,7 +61,6 @@
       "prefix": "app",
       "projectType": "application",
       "root": "",
-      "schematics": {},
       "sourceRoot": "src"
     }
   },

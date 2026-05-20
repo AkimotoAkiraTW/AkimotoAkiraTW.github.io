@@ -45,6 +45,9 @@ import { SITE_CONFIG } from '../../core/config/site.config';
             <a mat-stroked-button routerLink="/blog" class="hero-btn">
               <mat-icon>article</mat-icon>{{ cfg.navLabels.blog }}
             </a>
+            <a mat-stroked-button routerLink="/tools" class="hero-btn">
+              <mat-icon>build</mat-icon>{{ cfg.navLabels.tools }}
+            </a>
           </div>
         }
       </section>
@@ -90,6 +93,25 @@ import { SITE_CONFIG } from '../../core/config/site.config';
                       }
                     </ul>
                   }
+                  @if (exp.projects && exp.projects.length) {
+                    <div class="project-list">
+                      @for (proj of exp.projects; track proj.name) {
+                        <div class="project-card">
+                          <p class="project-name">
+                            <mat-icon>folder_open</mat-icon>{{ proj.name }}
+                          </p>
+                          <ul class="timeline-list">
+                            @for (h of proj.highlights; track h) {
+                              <li>{{ h }}</li>
+                            }
+                          </ul>
+                          @if (proj.tech) {
+                            <p class="project-tech">{{ proj.tech }}</p>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
               </div>
             }
@@ -116,15 +138,7 @@ import { SITE_CONFIG } from '../../core/config/site.config';
           </div>
         </section>
 
-        <!-- Bottom actions -->
-        <div class="bottom-actions">
-          <a mat-stroked-button routerLink="/portfolio">
-            <mat-icon>work</mat-icon>查看完整作品集
-          </a>
-          <a mat-stroked-button routerLink="/tools">
-            <mat-icon>build</mat-icon>開發工具箱
-          </a>
-        </div>
+        <div class="page-end-spacer"></div>
       }
 
     </div>
@@ -140,7 +154,7 @@ import { SITE_CONFIG } from '../../core/config/site.config';
       font-weight: 500;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      opacity: 0.55;
+      color: var(--text-muted);
       margin-bottom: 16px;
     }
     .hero-title {
@@ -149,10 +163,11 @@ import { SITE_CONFIG } from '../../core/config/site.config';
       letter-spacing: -0.04em;
       line-height: 1.1;
       margin-bottom: 20px;
+      color: var(--text-primary);
     }
     .hero-summary {
       font-size: clamp(1rem, 1.8vw, 1.15rem);
-      opacity: 0.7;
+      color: var(--text-secondary);
       max-width: 640px;
       margin: 0 auto 28px;
       line-height: 1.75;
@@ -171,10 +186,10 @@ import { SITE_CONFIG } from '../../core/config/site.config';
       font-size: 0.8rem;
       padding: 6px 14px;
       border-radius: 9999px;
-      border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-      opacity: 0.75;
-      transition: opacity 200ms ease;
-      &:hover { opacity: 1; }
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      transition: all 200ms ease;
+      &:hover { border-color: var(--accent-color); color: var(--text-primary); background: var(--surface-alt); }
       mat-icon { font-size: 14px; width: 14px; height: 14px; }
     }
     .hero-actions {
@@ -201,7 +216,7 @@ import { SITE_CONFIG } from '../../core/config/site.config';
       font-weight: 600;
       letter-spacing: -0.01em;
       margin-bottom: 28px;
-      opacity: 0.85;
+      color: var(--text-primary);
       mat-icon { font-size: 20px; width: 20px; height: 20px; }
     }
 
@@ -216,7 +231,7 @@ import { SITE_CONFIG } from '../../core/config/site.config';
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      opacity: 0.5;
+      color: var(--text-muted);
       margin-bottom: 10px;
     }
 
@@ -239,36 +254,62 @@ import { SITE_CONFIG } from '../../core/config/site.config';
     .timeline-period {
       font-size: 0.75rem;
       font-family: 'Fira Code', monospace;
-      opacity: 0.5;
+      color: var(--text-muted);
       line-height: 1.5;
     }
     .timeline-title {
       font-weight: 600;
       font-size: 1rem;
+      color: var(--text-primary);
       margin-bottom: 4px;
     }
     .timeline-sub {
       font-size: 0.875rem;
-      opacity: 0.6;
+      color: var(--text-secondary);
       margin-bottom: 10px;
     }
     .timeline-list {
       padding-left: 18px;
       font-size: 0.875rem;
-      opacity: 0.75;
+      color: var(--text-secondary);
       li { margin-bottom: 6px; line-height: 1.6; }
     }
 
-    /* Bottom */
-    .bottom-actions {
+    /* Projects */
+    .project-list {
+      margin-top: 16px;
       display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-      padding: 40px 0 64px;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .project-card {
+      padding: 12px 16px;
+      border-left: 2px solid var(--accent-color);
+      background: var(--surface-alt);
+      border-radius: 0 8px 8px 0;
+    }
+    .project-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--accent-color); }
+    }
+    .project-tech {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      font-family: 'Fira Code', monospace;
+      color: var(--accent-color);
+      opacity: 0.9;
     }
 
-    /* RWD: mobile 時 timeline 改為單欄 */
+
+
+    .page-end-spacer { height: 64px; }
+
     @media (max-width: 600px) {
       .timeline-item {
         grid-template-columns: 1fr;

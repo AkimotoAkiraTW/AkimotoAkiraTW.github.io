@@ -1,0 +1,119 @@
+{
+  "name": "KC",
+  "title": "軟體工程師・全端開發",
+  "summary": "7 年全端開發經驗，現職深耕農業領域業務管理系統超過 5 年，擔任 50+ 客戶單位的單一技術對接窗口。主導新一代 ERP 進銷存模組後端開發，針對成本歷史回溯痛點導入 Event Sourcing 架構，解決傳統 CRUD 無法重播歷史庫存狀態的限制。習慣以業務問題為導向做技術決策，擅長穩定維護與延伸既有複雜系統。",
+  "contact": {
+    "location": "台灣",
+    "github": "AkimotoAkiraTW"
+  },
+  "skills": [
+    {
+      "category": "後端開發",
+      "items": [".NET Core (RESTful API)", "ASP.NET WebForm"]
+    },
+    {
+      "category": "前端開發",
+      "items": ["Next.js", "TypeScript"]
+    },
+    {
+      "category": "資料庫",
+      "items": ["MSSQL (SQL Server)", "MySQL"]
+    },
+    {
+      "category": "環境與部署",
+      "items": ["Docker Compose", "IIS"]
+    },
+    {
+      "category": "AI 開發工具",
+      "items": ["Augment Code", "Cursor"]
+    }
+  ],
+  "experience": [
+    {
+      "company": "接案型資訊公司",
+      "position": "軟體工程師",
+      "startDate": "2021-04",
+      "endDate": "至今",
+      "description": "專注於開發與維護農業領域供銷部業務管理系統，服務對象涵蓋農藥肥料倉庫與農產加工廠。",
+      "highlights": [
+        "E2E 客製化導入：依各客戶業務差異進行深度客製開發，涵蓋需求釐清、功能實作、測試、上線及長期維護。",
+        "生產系統長期維護：作為 50+ 客戶單位的單一技術對接窗口，負責日常查帳、資料修正、系統異常排除。"
+      ],
+      "projects": [
+        {
+          "name": "新一代ERP進銷存模組",
+          "highlights": [
+            "導入 Event Sourcing（Bi-Temporal）解決歷史成本鏈斷裂問題，可重播任意時間點庫存狀態。",
+            "實作 5 種成本計價策略（FIFO / LIFO / FEFO / 加權平均 / 標準成本）；解決浮點數殘差問題。",
+            "以 Template Method 統整庫存異動 Transaction 邊界，實作凍倉鎖定、會計期間鎖等業務守衛。",
+            "採 EDA 解耦領域事件與庫存扣減；撰寫 Unit / Integration Test；Git 分支管理與 PR 協作。"
+          ],
+          "tech": "C# Web API + Next.js 14 + Ant Design 5"
+        },
+        {
+          "name": "農業加工系統客製化",
+          "highlights": [
+            "攻克多倉調撥與加工混合情境下的成本斷點問題，確保進貨→調撥→加工→產出跨節點成本連貫性。",
+            "配合農業計量高度差異需求，調整成本欄位精度至 decimal(38,8)。",
+            "導入自動配銷邏輯，顯著降低終端用戶操作負擔。"
+          ]
+        },
+        {
+          "name": "關貿網路電子發票串接",
+          "highlights": [
+            "獨立完成電子發票整合（電子載具、愛心碼、作廢、混稅等功能）。",
+            "協助客戶向財政部申請發票字軌，解決多銷售點跨 IP 路由與防火牆連線問題。"
+          ]
+        },
+        {
+          "name": "表單流程管理系統開發",
+          "highlights": [
+            "進行跨單位需求訪談，設計動態簽核流程引擎底層資料表結構。",
+            "重新設計二段式檔案上傳機制，解決 ASP.NET WebForm PostBack 大檔案導致 IIS 崩潰問題。"
+          ]
+        },
+        {
+          "name": "會務管理系統維護",
+          "highlights": [
+            "批次報表改為 PDF 彙整輸出，解除印表機資源競爭問題並大幅縮短列印時間。",
+            "調校 MySQL Session 層級暫存空間，確保大資料量批次報表穩定產製。"
+          ]
+        }
+      ]
+    },
+    {
+      "company": "博弈業（已停業）",
+      "position": "軟體工程師",
+      "startDate": "2019-01",
+      "endDate": "2019-08",
+      "description": "博弈平台後台數據分析系統開發。",
+      "highlights": [
+        "負責博弈平台後台數據分析系統開發（Vue.js + C# MVC）。",
+        "規劃 MSSQL 資料表結構，開發管理層數據報表（玩家獎勵統計、上下線分潤計算）。"
+      ],
+      "projects": []
+    },
+    {
+      "company": "POS 資訊業",
+      "position": "應用軟體工程師",
+      "startDate": "2018-03",
+      "endDate": "2018-12",
+      "description": "參與 JSP 進銷存管理系統開發。",
+      "highlights": [
+        "參與 JSP 進銷存管理系統開發，奠定關聯式資料庫設計基礎。",
+        "初步接觸第三方 API 串接開發。"
+      ],
+      "projects": []
+    }
+  ],
+  "education": [
+    {
+      "institution": "大學",
+      "degree": "學士",
+      "field": "資訊工程學系",
+      "startDate": "2013-09",
+      "endDate": "2017-06"
+    }
+  ],
+  "certifications": []
+}

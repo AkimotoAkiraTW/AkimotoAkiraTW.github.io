@@ -2,9 +2,82 @@
   "displayName": "KC",
   "githubUsername": "AkimotoAkiraTW",
   "siteUrl": "https://AkimotoAkiraTW.github.io",
-  "siteDescription": "具備豐富的系統開發與架構維護經驗，擅長以 C#、SQL 與網頁前端技術解決複雜的商業問題，具備端到端全週期交付能力。",
-  "siteTitle": "KC | 全端工程師",
+  "siteTitle": "KC | 開發者工具箱 & 筆記",
   "copyrightYear": 2026,
+  "tools": [
+    {
+      "id": "json-formatter",
+      "name": "JSON 結構化工具",
+      "category": "work",
+      "description": "JSON 格式化、樹狀預覽與型別高亮。",
+      "icon": "code",
+      "route": "tools/json-formatter"
+    },
+    {
+      "id": "uber-eats-settlement",
+      "name": "Uber Eats 對帳工具",
+      "category": "life",
+      "description": "工作午餐必備，自動平攤 Uber Eats 訂單金額。",
+      "icon": "receipt_long",
+      "route": "tools/uber-eats-settlement"
+    },
+    {
+      "id": "connection-checker",
+      "name": "Connection Checker",
+      "category": "work",
+      "description": "多端點連線即時監控。",
+      "icon": "sensors",
+      "route": "tools/connection-checker"
+    },
+    {
+      "id": "number-to-chinese",
+      "name": "數字轉中文大寫",
+      "category": "work",
+      "description": "阿拉伯數字轉換國字大寫金額。",
+      "icon": "payments",
+      "route": "tools/number-to-chinese"
+    },
+    {
+      "id": "markdown-editor",
+      "name": "智慧編輯器",
+      "category": "work",
+      "description": "支援 Markdown 與 Mermaid 流程圖渲染。",
+      "icon": "edit_note",
+      "route": "tools/markdown-editor"
+    },
+    {
+      "id": "media-declaration-parser",
+      "name": "媒體申報檔解析工具",
+      "category": "work",
+      "description": "解析國稅局 TXT 媒體申報檔，自動依法規整期 B2C 逆算稅額，支援特種稅率分群彙總。",
+      "icon": "receipt_long",
+      "route": "tools/media-declaration-parser"
+    },
+    {
+      "id": "tradevan-parser",
+      "name": "關貿 CSV 解析工具",
+      "category": "work",
+      "description": "解析電子發票加值中心下載的 CSV 檔，自動計算 B2C 整期逆算稅額，產出法定申報期總表。",
+      "icon": "table_chart",
+      "route": "tools/tradevan-parser"
+    },
+    {
+      "id": "barcode-generator",
+      "name": "條碼與 QR Code 產生器",
+      "category": "work",
+      "description": "即時產生高品質 QR Code 與各式條碼，支援漸層色彩與 SVG 下載。",
+      "icon": "qr_code_2",
+      "route": "tools/barcode-generator"
+    },
+    {
+      "id": "barcode-scanner",
+      "name": "條碼掃描器",
+      "category": "work",
+      "description": "用手機或電腦鏡頭連續掃描條碼與 QR Code，支援 CSV 匯出與數量登錄。",
+      "icon": "document_scanner",
+      "route": "tools/barcode-scanner"
+    }
+  ],
   "navLabels": {
     "home": "首頁",
     "portfolio": "作品集",

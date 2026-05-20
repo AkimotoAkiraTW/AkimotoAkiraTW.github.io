@@ -1,9 +1,8 @@
 [
   {
-    "slug": "hello-world",
-    "title": "我的第一篇文章：從 WebForm 到現代化全端開發",
+    "id": "hello-world",
+    "title": "hello-world",
     "date": "2026-05-03",
-    "tags": ["心得", "C#", "Angular", "全端開發"],
-    "summary": "分享我從維護傳統 WebForm 系統，到逐步擁抱現代化全端技術的心路歷程。"
+    "summary": "--- title: 我的第一篇文章：從 WebForm 到現代化全端開發 date: 2026-05-03 tags: [心得, C#, Angular, 全端開發] summary: 分享我從維護..."
   }
 ]
