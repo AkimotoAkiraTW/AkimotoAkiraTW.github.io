@@ -17,6 +17,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body class="mat-typography">
+  <!-- GitHub Pages SPA redirect restore: 404.html stores the original URL, this script restores it -->
+  <script>
+    (function(){
+      var redirect = sessionStorage.redirect;
+      delete sessionStorage.redirect;
+      if (redirect && redirect !== location.href) {
+        history.replaceState(null, null, redirect);
+      }
+    })();
+  </script>
   <app-root></app-root>
   <noscript>請開啟 JavaScript 以執行此應用程式。</noscript>
 </body>
