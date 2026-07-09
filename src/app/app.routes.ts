@@ -82,6 +82,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tools/customer/customer-list.component').then(m => m.CustomerListComponent),
   },
   {
+    path: 'tools/combination-calculator',
+    title: '排列組合計算器 | KC',
+    loadComponent: () => import('./features/tools/combination-calculator/combination-calculator.component').then(m => m.CombinationCalculatorComponent),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

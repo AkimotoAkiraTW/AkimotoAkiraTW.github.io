@@ -78,5 +78,13 @@
     "icon": "contact_phone",
     "route": "customer",
     "category": "work"
+  },
+  {
+    "id": "combination-calculator",
+    "name": "排列組合計算器",
+    "description": "設定號碼區間與 N 取 K 參數，以 DFS 回溯演算法生成所有組合，內建 OOM 防護與 URL 壓縮分享機制。",
+    "icon": "calculate",
+    "route": "combination-calculator",
+    "category": "life"
   }
 ]
