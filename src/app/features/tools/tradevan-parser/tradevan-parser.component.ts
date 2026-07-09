@@ -5,9 +5,11 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import { MatOptionModule } from '@angular/material/core';
+import {
+  UiSelectFieldComponent,
+  UiTextFieldComponent,
+} from '../../../shared/components/form-primitives';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ToolLayoutComponent } from '../tool-layout.component';
 import { TradevanParserService, TradevanRecord } from './tradevan-parser.service';
@@ -18,7 +20,7 @@ import { TradevanParserService, TradevanRecord } from './tradevan-parser.service
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule, MatButtonModule, MatIconModule, MatCardModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule,
+    MatOptionModule, UiSelectFieldComponent, UiTextFieldComponent, MatTooltipModule,
     ToolLayoutComponent,
   ],
   template: `
@@ -97,22 +99,21 @@ import { TradevanParserService, TradevanRecord } from './tradevan-parser.service
 
       <!-- 篩選 -->
       <mat-card appearance="outlined" class="filter-card">
-        <mat-card-content>
+        <mat-card-content class="tool-form-shell">
           <div class="filter-row">
-            <mat-form-field appearance="outline" class="filter-field">
-              <mat-label>類型</mat-label>
-              <mat-select [(ngModel)]="filterType" (ngModelChange)="applyFilter()">
-                <mat-option value="valid">全部正常</mat-option>
-                <mat-option value="b2c">自然人(B2C)</mat-option>
-                <mat-option value="b2b">法人(B2B)</mat-option>
-                <mat-option value="void">作廢</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="filter-field search-field">
-              <mat-label>搜尋</mat-label>
-              <mat-icon matPrefix>search</mat-icon>
-              <input matInput [(ngModel)]="searchText" (ngModelChange)="applyFilter()" placeholder="發票號碼 / 統編 / 名稱">
-            </mat-form-field>
+            <ui-select-field class="filter-field" label="類型" [(ngModel)]="filterType" (ngModelChange)="applyFilter()">
+              <mat-option value="valid">全部正常</mat-option>
+              <mat-option value="b2c">自然人(B2C)</mat-option>
+              <mat-option value="b2b">法人(B2B)</mat-option>
+              <mat-option value="void">作廢</mat-option>
+            </ui-select-field>
+            <ui-text-field
+              class="filter-field search-field"
+              label="搜尋"
+              [(ngModel)]="searchText"
+              (ngModelChange)="applyFilter()"
+              placeholder="發票號碼 / 統編 / 名稱"
+            />
             <span class="result-count">顯示 {{ filteredRows().length }} 筆</span>
             <button mat-stroked-button (click)="svc.exportCsv(allRows(), generalRatePct / 100)">
               <mat-icon>download</mat-icon> 匯出 CSV

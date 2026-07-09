@@ -34,8 +34,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and Sync
-        # 使用我們新建立的單一事實來源同步腳本與 PWA 建置
+      - name: Build
         run: npm run build -- --base-href /
 
       - name: Copy 404.html for SPA routing

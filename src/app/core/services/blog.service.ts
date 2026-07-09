@@ -9,8 +9,8 @@ import { map } from 'rxjs/operators';
  * BlogService
  * 部落格文章列表與 Markdown 內容讀取服務。
  * 新增文章只需：
- *   1. 新增 assets/blog/<slug>.md
- *   2. 在 assets/blog/index.json 加入對應的 metadata 條目
+ *   1. 新增 src/assets/blog/<slug>.md（可選 YAML frontmatter：title, date, tags, summary）
+ *   2. 執行 npm run sync（自動產生 assets/blog/index.json）
  */
 @Injectable({ providedIn: 'root' })
 export class BlogService {

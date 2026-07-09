@@ -39,3 +39,7 @@ src/assets/blog/
 
 # Docker
 docker-compose.override.yml
+
+# Cursor Agent（本機 IDE 用，非網站原始碼）
+.agents/
+skills-lock.json

@@ -2,34 +2,107 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
+/* ============================================================
+ *  Design Tokens（單一事實來源）
+ *  ──────────────────────────────────────────────────────────
+ *  新增工具時請優先消費以下 CSS 變數，避免硬編色碼。
+ *  - 顏色：bg / surface / surface-alt / text-* / border / accent
+ *  - 半透明：surface-overlay / accent-soft / accent-softer
+ *  - 語意狀態：success / warning / danger / info（含 -soft、-text）
+ *  - 字體間距：space-{xs..xl}
+ *  - 圓角：radius-{sm..xl}、radius-pill
+ *  - 陰影：shadow-{sm..lg}
+ *  - 過場：transition-fast / transition-base
+ *  暗色主題由 `<html class="dark-theme">` 切換（ThemeService 統一管理）。
+ * ============================================================ */
+
 :root {
   color-scheme: light;
-  /* ── Light Mode Design Tokens ── */
+  /* ── Light Mode 基礎色 ── */
   --bg-color: #f8fafc;          /* Slate-50 */
   --surface-color: #ffffff;
   --surface-alt: #f1f5f9;       /* Slate-100 */
+  --surface-overlay: rgba(15, 23, 42, 0.04);
   --text-primary: #1e293b;      /* Slate-800 */
   --text-secondary: #475569;    /* Slate-600 */
-  --text-muted: #94a3b8;       /* Slate-400 */
-  --border-color: rgba(0, 0, 0, 0.08);
+  --text-muted: #94a3b8;        /* Slate-400 */
+  --border-color: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.16);
   --accent-color: #3b82f6;      /* Blue-500 */
+  --accent-color-hover: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.10);
+  --accent-softer: rgba(59, 130, 246, 0.04);
+  --accent-on: #ffffff;
   --glass-bg: rgba(255, 255, 255, 0.7);
   --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+  /* ── 語意狀態（Light） ── */
+  --state-success: #16a34a;
+  --state-success-soft: rgba(22, 163, 74, 0.10);
+  --state-warning: #d97706;
+  --state-warning-soft: rgba(217, 119, 6, 0.12);
+  --state-danger: #dc2626;
+  --state-danger-soft: rgba(220, 38, 38, 0.10);
+  --state-info: #0ea5e9;
+  --state-info-soft: rgba(14, 165, 233, 0.10);
+
+  /* ── 間距 scale ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* ── 圓角 scale ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  /* ── 陰影 scale ── */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.08);
+
+  /* ── 動畫過場 ── */
+  --transition-fast: 150ms ease;
+  --transition-base: 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html.dark-theme {
   color-scheme: dark;
-  /* ── Dark Mode Design Tokens ── */
   --bg-color: #0f172a;          /* Slate-900 */
   --surface-color: #1e293b;     /* Slate-800 */
   --surface-alt: #334155;       /* Slate-700 */
+  --surface-overlay: rgba(255, 255, 255, 0.04);
   --text-primary: #f1f5f9;      /* Slate-100 */
   --text-secondary: #cbd5e1;    /* Slate-300 */
-  --text-muted: #64748b;       /* Slate-500 */
-  --border-color: rgba(255, 255, 255, 0.1);
+  --text-muted: #64748b;        /* Slate-500 */
+  --border-color: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.20);
   --accent-color: #60a5fa;      /* Blue-400 */
+  --accent-color-hover: #93c5fd;
+  --accent-soft: rgba(96, 165, 250, 0.16);
+  --accent-softer: rgba(96, 165, 250, 0.08);
+  --accent-on: #0f172a;
   --glass-bg: rgba(15, 23, 42, 0.8);
   --card-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+
+  --state-success: #4ade80;
+  --state-success-soft: rgba(74, 222, 128, 0.16);
+  --state-warning: #fbbf24;
+  --state-warning-soft: rgba(251, 191, 36, 0.16);
+  --state-danger: #f87171;
+  --state-danger-soft: rgba(248, 113, 113, 0.16);
+  --state-info: #38bdf8;
+  --state-info-soft: rgba(56, 189, 248, 0.16);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 *, *::before, *::after {
@@ -81,7 +154,7 @@ img {
 
 /* ── Angular Material Overrides (極簡圓潤風格) ── */
 .mat-mdc-card {
-  border-radius: 16px !important;
+  border-radius: var(--radius-lg) !important;
   box-shadow: var(--card-shadow) !important;
   border: 1px solid var(--border-color) !important;
   background-color: var(--surface-color) !important;
@@ -89,12 +162,12 @@ img {
 }
 
 .mat-mdc-button, .mat-mdc-raised-button, .mat-mdc-stroked-button {
-  border-radius: 9999px !important; /* 藥丸形狀按鈕 */
+  border-radius: var(--radius-pill) !important;
   letter-spacing: 0.02em;
 }
 
 .mat-mdc-standard-chip {
-  border-radius: 8px !important;
+  border-radius: var(--radius-md) !important;
   border: none !important;
   background-color: var(--surface-alt) !important;
   color: var(--text-secondary) !important;
@@ -104,12 +177,10 @@ img {
 /* ── Page header (共用) ── */
 .page-header {
   text-align: center;
-  /* 更大量的留白 */
   padding: clamp(48px, 8vw, 80px) 0 clamp(40px, 6vw, 64px);
 }
 
 .page-header h1 {
-  /* Fluid Title */
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 600;
   letter-spacing: -0.04em;
@@ -127,52 +198,22 @@ img {
 
 /* ── Layout container ── */
 .content-container {
-  max-width: 1000px; /* 縮減最大寬度讓文字閱讀更集中 */
+  max-width: 1000px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
-@media (min-width: 768px) {
-  .content-container { padding: 0 40px; }
-}
-
-@media (min-width: 1024px) {
-  .content-container { padding: 0 56px; }
-}
+@media (min-width: 768px)  { .content-container { padding: 0 40px; } }
+@media (min-width: 1024px) { .content-container { padding: 0 56px; } }
 
 /* ── Markdown Body ── */
-.markdown-body {
-  color: var(--text-primary);
-  word-wrap: break-word;
-}
+.markdown-body { color: var(--text-primary); word-wrap: break-word; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3 { color: var(--text-primary); margin-top: 2em; margin-bottom: 1em; }
+.markdown-body p, .markdown-body li { color: var(--text-secondary); margin-bottom: 1em; }
+.markdown-body blockquote { border-left: 4px solid var(--border-color); padding-left: 1em; color: var(--text-muted); font-style: italic; }
+.markdown-body code { background: var(--surface-alt); padding: 0.2em 0.4em; border-radius: var(--radius-sm); font-family: 'Fira Code', monospace; font-size: 0.9em; }
 
-.markdown-body h1, .markdown-body h2, .markdown-body h3 {
-  color: var(--text-primary);
-  margin-top: 2em;
-  margin-bottom: 1em;
-}
-
-.markdown-body p, .markdown-body li {
-  color: var(--text-secondary);
-  margin-bottom: 1em;
-}
-
-.markdown-body blockquote {
-  border-left: 4px solid var(--border-color);
-  padding-left: 1em;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.markdown-body code {
-  background: var(--surface-alt);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-family: 'Fira Code', monospace;
-  font-size: 0.9em;
-}
-
-/* ── Premium Number Input Spinner Styling ── */
+/* ── Number input spinner ── */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   cursor: pointer;
@@ -182,11 +223,8 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: 2px;
 }
 
-input[type="number"]:hover::-webkit-inner-spin-button {
-  opacity: 0.85;
-}
+input[type="number"]:hover::-webkit-inner-spin-button { opacity: 0.85; }
 
-/* ── Hide Spin Buttons inside table/inline number inputs globally ── */
 .inline-input::-webkit-outer-spin-button,
 .inline-input::-webkit-inner-spin-button,
 .limit-input::-webkit-outer-spin-button,
@@ -197,7 +235,349 @@ input[type="number"]:hover::-webkit-inner-spin-button {
 
 .inline-input[type="number"],
 .limit-input[type="number"] {
-  -moz-appearance: textfield !important; /* Firefox */
+  -moz-appearance: textfield !important;
 }
 
+/* ============================================================
+ *  Reusable Utility Classes（給未來工具消費）
+ *  ──────────────────────────────────────────────────────────
+ *  使用範例：
+ *    <div class="surface-card">…</div>
+ *    <span class="badge badge-success">啟用</span>
+ *    <div class="segmented-control">…</div>
+ *    <div class="stat-card"><span class="stat-value">12</span><span class="stat-label">數量</span></div>
+ *    <div class="empty-state"><mat-icon>inbox</mat-icon><p>沒有資料</p></div>
+ *
+ *  原則：
+ *  - 結構性 class（surface-card / stat-card）統一圓角、邊框、padding、陰影；
+ *  - 修飾 class（badge-success 等）只負責顏色語意；
+ *  - 一律消費 design tokens，禁止硬編色碼。
+ * ============================================================ */
 
+/* 卡片底層 */
+.surface-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.surface-card.is-interactive { cursor: pointer; }
+.surface-card.is-interactive:hover {
+  border-color: var(--accent-color);
+  box-shadow: var(--shadow-md);
+}
+
+/* Section title（含 icon 樣式） */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-md);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.section-title .mat-icon,
+.section-title mat-icon {
+  color: var(--accent-color);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* 統計卡片 */
+.stat-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card.is-highlight {
+  border-color: var(--accent-color);
+  background: var(--accent-softer);
+}
+
+.stat-card .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-card .stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Badge 共用 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.3px;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  line-height: 1.6;
+}
+
+.badge-accent  { background: var(--accent-soft);        color: var(--accent-color);  }
+.badge-success { background: var(--state-success-soft); color: var(--state-success); }
+.badge-warning { background: var(--state-warning-soft); color: var(--state-warning); }
+.badge-danger  { background: var(--state-danger-soft);  color: var(--state-danger);  }
+.badge-info    { background: var(--state-info-soft);    color: var(--state-info);    }
+.badge-muted   { background: var(--surface-alt);        color: var(--text-muted);    }
+
+/* Segmented control（與篩選器 / 表單共用） */
+.segmented-control {
+  display: inline-flex;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.segmented-control button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--radius-md) - 3px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.segmented-control button:hover:not(.active) {
+  color: var(--text-primary);
+  background: var(--surface-overlay);
+}
+
+.segmented-control button.active {
+  background: var(--surface-color);
+  color: var(--accent-color);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 空狀態 */
+.empty-state {
+  text-align: center;
+  padding: var(--space-3xl) var(--space-lg);
+  color: var(--text-muted);
+  background: var(--surface-color);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.empty-state .mat-icon,
+.empty-state mat-icon {
+  font-size: 36px;
+  width: 36px;
+  height: 36px;
+  margin-bottom: var(--space-sm);
+  color: var(--text-muted);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* 主要按鈕標準尺寸（如有 mat-raised-button 想稍小可加上 .compact-btn） */
+.compact-btn {
+  height: 40px !important;
+  line-height: 40px !important;
+  border-radius: var(--radius-md) !important;
+  font-weight: 600 !important;
+  padding: 0 18px !important;
+}
+
+.compact-btn .mat-icon,
+.compact-btn mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+}
+
+/* ── CRM / 工具表單欄位（唯一標準模式） ──
+ * 請一律使用：
+ *   <mat-form-field appearance="outline" floatLabel="always">
+ *     <mat-label>欄位名稱</mat-label>
+ *     <input matInput [formField]="…" placeholder="例：…" />  <!-- placeholder 僅作選填提示 -->
+ *   </mat-form-field>
+ * 放在 .crm-form-shell（dialog 內）或 .crm-partner-dialog 底下。
+ * 篩選列（filter-search-panel）使用外部 .field-label，不套用此模式。
+ */
+.crm-form-shell .mat-mdc-form-field .mdc-floating-label,
+.crm-partner-dialog .mat-mdc-form-field .mdc-floating-label {
+  color: var(--text-secondary) !important;
+}
+
+.crm-form-shell .mat-mdc-form-field.mat-focused .mdc-floating-label,
+.crm-partner-dialog .mat-mdc-form-field.mat-focused .mdc-floating-label {
+  color: var(--accent-color) !important;
+}
+
+.crm-form-shell .mat-mdc-text-field-wrapper,
+.crm-partner-dialog .mat-mdc-text-field-wrapper {
+  background-color: var(--surface-alt);
+  border-radius: var(--radius-md);
+}
+
+.crm-form-shell .mat-mdc-form-field .mdc-notched-outline__leading,
+.crm-form-shell .mat-mdc-form-field .mdc-notched-outline__notch,
+.crm-form-shell .mat-mdc-form-field .mdc-notched-outline__trailing,
+.crm-partner-dialog .mat-mdc-form-field .mdc-notched-outline__leading,
+.crm-partner-dialog .mat-mdc-form-field .mdc-notched-outline__notch,
+.crm-partner-dialog .mat-mdc-form-field .mdc-notched-outline__trailing {
+  border-color: var(--border-color) !important;
+}
+
+.crm-form-shell .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__leading,
+.crm-form-shell .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__notch,
+.crm-form-shell .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__trailing,
+.crm-partner-dialog .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__leading,
+.crm-partner-dialog .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__notch,
+.crm-partner-dialog .mat-mdc-form-field.mat-focused .mdc-notched-outline .mdc-notched-outline__trailing {
+  border-color: var(--accent-color) !important;
+}
+
+.crm-form-shell input.mat-mdc-input-element,
+.crm-form-shell textarea.mat-mdc-input-element,
+.crm-form-shell .mat-mdc-select-value,
+.crm-partner-dialog input.mat-mdc-input-element,
+.crm-partner-dialog textarea.mat-mdc-input-element,
+.crm-partner-dialog .mat-mdc-select-value,
+.tool-form-shell input.mat-mdc-input-element,
+.tool-form-shell textarea.mat-mdc-input-element,
+.tool-form-shell .mat-mdc-select-value {
+  color: var(--text-primary);
+}
+
+.crm-form-shell input[type="date"].mat-mdc-input-element,
+.crm-partner-dialog input[type="date"].mat-mdc-input-element {
+  color-scheme: dark light;
+}
+
+.crm-form-shell input[type="date"].mat-mdc-input-element::-webkit-calendar-picker-indicator,
+.crm-partner-dialog input[type="date"].mat-mdc-input-element::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.crm-form-shell .mat-mdc-select-arrow,
+.crm-partner-dialog .mat-mdc-select-arrow {
+  color: var(--text-secondary);
+}
+
+.crm-form-shell .mat-mdc-form-field-hint,
+.crm-form-shell mat-error,
+.crm-partner-dialog .mat-mdc-form-field-hint,
+.crm-partner-dialog mat-error,
+.tool-form-shell .mat-mdc-form-field-hint,
+.tool-form-shell mat-error {
+  color: var(--state-danger);
+}
+
+/* UI Primitives + 工具頁表單（與 CRM 欄位視覺一致） */
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field) .mdc-floating-label {
+  color: var(--text-secondary) !important;
+}
+
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field).mat-focused .mdc-floating-label {
+  color: var(--accent-color) !important;
+}
+
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field) .mat-mdc-text-field-wrapper {
+  background-color: var(--surface-alt);
+  border-radius: var(--radius-md);
+}
+
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field) .mdc-notched-outline__leading,
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field) .mdc-notched-outline__notch,
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field) .mdc-notched-outline__trailing {
+  border-color: var(--border-color) !important;
+}
+
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field).mat-focused .mdc-notched-outline .mdc-notched-outline__leading,
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field).mat-focused .mdc-notched-outline .mdc-notched-outline__notch,
+:is(.crm-form-shell, .crm-partner-dialog, .tool-form-shell) :is(.mat-mdc-form-field, .ui-form-field.mat-mdc-form-field).mat-focused .mdc-notched-outline .mdc-notched-outline__trailing {
+  border-color: var(--accent-color) !important;
+}
+
+/* UI Primitives：欄位寬度填滿容器 */
+ui-text-field,
+ui-textarea-field,
+ui-select-field,
+ui-date-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tool-form-shell .mat-mdc-form-field,
+.crm-form-shell .mat-mdc-form-field,
+.ui-form-field.mat-mdc-form-field {
+  width: 100%;
+}
+
+/* ── CRM 商業夥伴表單 Dialog ── */
+.crm-partner-dialog .mat-mdc-dialog-container {
+  --mdc-dialog-container-shape: var(--radius-lg);
+  padding: 0;
+}
+
+.crm-partner-dialog .mat-mdc-dialog-surface {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  width: 100%;
+}
+
+.crm-partner-dialog .mat-mdc-dialog-component-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.crm-partner-dialog .mat-mdc-dialog-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (max-width: 600px) {
+  .crm-partner-dialog .mat-mdc-dialog-container {
+    margin: 12px;
+    max-width: calc(100vw - 24px) !important;
+  }
+}

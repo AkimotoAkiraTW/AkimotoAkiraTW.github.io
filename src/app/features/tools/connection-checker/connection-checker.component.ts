@@ -11,8 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { UiTextFieldComponent } from '../../../shared/components/form-primitives';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { interval, Subscription } from 'rxjs';
 import { ToolLayoutComponent } from '../tool-layout.component';
@@ -49,8 +48,7 @@ interface EndpointCard {
     MatButtonModule,
     MatIconModule,
     MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
+    UiTextFieldComponent,
     MatTooltipModule,
     ToolLayoutComponent,
   ],
@@ -100,50 +98,38 @@ interface EndpointCard {
               </button>
             </mat-card-header>
 
-            <mat-card-content>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Target URL</mat-label>
-                <input
-                  matInput
-                  type="text"
-                  [(ngModel)]="card.url"
-                  [disabled]="card.isRunning"
-                  placeholder="https://example.com/"
+            <mat-card-content class="tool-form-shell">
+              <ui-text-field
+                class="full-width"
+                label="Target URL"
+                [(ngModel)]="card.url"
+                placeholder="https://example.com/"
+              />
+
+              <ui-text-field
+                class="freq-field"
+                label="頻率 (ms)"
+                type="number"
+                [(ngModel)]="card.frequencyMs"
+              />
+
+              <div class="endpoint-actions">
+                <button
+                  mat-raised-button
+                  [color]="card.isRunning ? 'warn' : 'primary'"
+                  (click)="toggleCard(card.id)"
                 >
-                <mat-icon matPrefix>link</mat-icon>
-              </mat-form-field>
-
-              <div class="freq-row">
-                <mat-form-field appearance="outline" class="freq-field">
-                  <mat-label>頻率 (ms)</mat-label>
-                  <input
-                    matInput
-                    type="number"
-                    [(ngModel)]="card.frequencyMs"
-                    [disabled]="card.isRunning"
-                    min="50"
-                  >
-                  <mat-icon matPrefix>timer</mat-icon>
-                </mat-form-field>
-
-                <div class="card-actions">
-                  <button
-                    mat-raised-button
-                    [color]="card.isRunning ? 'warn' : 'primary'"
-                    (click)="toggleCard(card.id)"
-                  >
-                    <mat-icon>{{ card.isRunning ? 'stop' : 'play_arrow' }}</mat-icon>
-                    {{ card.isRunning ? 'Stop' : 'Start' }}
-                  </button>
-                  <button
-                    mat-stroked-button
-                    (click)="clearLog(card.id)"
-                    [disabled]="card.logs.length === 0"
-                  >
-                    <mat-icon>delete_sweep</mat-icon>
-                    Clear
-                  </button>
-                </div>
+                  <mat-icon>{{ card.isRunning ? 'stop' : 'play_arrow' }}</mat-icon>
+                  {{ card.isRunning ? 'Stop' : 'Start' }}
+                </button>
+                <button
+                  mat-stroked-button
+                  (click)="clearLog(card.id)"
+                  [disabled]="card.logs.length === 0"
+                >
+                  <mat-icon>delete_sweep</mat-icon>
+                  Clear
+                </button>
               </div>
 
               <!-- 日誌區 -->
@@ -253,23 +239,24 @@ interface EndpointCard {
       right: 8px;
     }
 
-    /* 頻率列 */
-    .freq-row {
+    .tool-form-shell {
       display: flex;
+      flex-direction: column;
       gap: 12px;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      margin-top: -4px;
     }
 
-    .freq-field { width: 130px; flex-shrink: 0; }
+    .freq-field {
+      max-width: 200px;
+    }
 
-    .card-actions {
+    .endpoint-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      flex: 1;
       align-items: center;
       padding-top: 4px;
+      border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+      margin-top: 4px;
     }
 
     .full-width { width: 100%; }

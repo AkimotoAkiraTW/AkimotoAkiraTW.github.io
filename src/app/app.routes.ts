@@ -77,6 +77,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tools/barcode-scanner/barcode-scanner.component').then(m => m.BarcodeScannerComponent),
   },
   {
+    path: 'tools/customer',
+    title: '離線 CRM 客戶管理 | KC',
+    loadComponent: () => import('./features/tools/customer/customer-list.component').then(m => m.CustomerListComponent),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

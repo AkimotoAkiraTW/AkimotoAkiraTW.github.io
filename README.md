@@ -7,15 +7,35 @@
 
 ## 🛠️ 目前已集成的工具
 
-1. **JSON 結構化工具**：JSON 格式化、樹狀預覽與型別高亮。
-2. **Uber Eats 對帳工具**：工作午餐必備，自動平攤 Uber Eats 訂單金額。
-3. **Connection Checker**：多端點連線即時監控。
-4. **數字轉中文大寫**：阿拉伯數字轉換國字大寫金額。
-5. **智慧編輯器**：支援 Markdown 與 Mermaid 流程圖渲染。
+1. **JSON 結構化工具**：貼入 JSON 以進行格式化、驗證與美化檢視。
+2. **Uber Eats 對帳工具**：輸入訂單 JSON，自動計算並產生成員應付金額。
+3. **Connection Checker**：多端點連線狀態即時監控，可自訂輪詢頻率。
+4. **數字轉中文大寫**：報帳與出差費用的好幫手，阿拉伯數字轉換國字大寫金額。
+5. **智慧編輯器**：支援 Markdown 與 Mermaid 流程圖的開發者筆記本。
 6. **媒體申報檔解析工具**：解析國稅局 TXT 媒體申報檔，自動依法規整期 B2C 逆算稅額，支援特種稅率分群彙總。
 7. **關貿 CSV 解析工具**：解析電子發票加值中心下載的 CSV 檔，自動計算 B2C 整期逆算稅額，產出法定申報期總表。
-8. **條碼與 QR Code 產生器**：即時產生高品質 QR Code 與各式條碼，支援漸層色彩與 SVG 下載。
-9. **條碼掃描器**：用手機或電腦鏡頭連續掃描條碼與 QR Code，支援 CSV 匯出與數量登錄。
+8. **條碼與 QR Code 產生器**：產生高品質 QR Code 與各式條碼（Data Matrix、PDF417、Aztec、Code 128 等），支援漸層色彩、Logo 置入、Wi-Fi 分享與向量 SVG 下載。
+9. **條碼掃描器**：用手機或電腦鏡頭連續掃描 QR Code、Data Matrix 等二維條碼，支援數量登錄、防誤掃冷卻與 CSV 匯出，可取代 PDA 掃描機。
+10. **離線 CRM 客戶管理**：具備原生校驗與 Fluent IndexedDB 查詢引擎的離線首選 CRM 快取資料庫，支援欄位過濾與軟刪除機制。
+
+## 📦 內容與維護
+
+| 類型 | 請手動編輯（單一來源） | `npm run content` 會更新 |
+|------|------------------------|---------------------------|
+| 工具箱 | `src/assets/data/tools.json` + `app.routes.ts` + 元件目錄 | `blog/index.json`、README 工具列表 |
+| 部落格 | `src/assets/blog/<slug>.md` | `blog/index.json` |
+| 全站設定 | `src/assets/data/site.json`（名稱、導覽文字） | — |
+| 履歷／作品集 | `resume.json`、`portfolio.json` | — |
+
+```bash
+npm run content              # 同步衍生檔 + 驗證（改 tools / blog 後、commit 前）
+npm run tool:create -- <id>    # 新工具 scaffold
+npm run build                  # 內含 content，再 Angular 建置
+```
+
+- 需要 **Node.js**（執行腳本），與 Git 無關；不必為了 content 而完整 `ng build`。
+- CI：`content-check` 驗證 PR；`deploy` 在 `build` 時會再跑一輪 `content`。
+- 請勿手改 README 的工具列表區塊；`site.json` 不再存放工具清單。
 
 ## 🚀 技術棧
 

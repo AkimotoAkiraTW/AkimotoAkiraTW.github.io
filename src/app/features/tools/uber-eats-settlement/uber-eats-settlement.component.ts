@@ -10,23 +10,25 @@ import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import { MatOptionModule } from '@angular/material/core';
+import {
+  UiSelectFieldComponent,
+  UiTextareaFieldComponent,
+  UiTextFieldComponent,
+} from '../../../shared/components/form-primitives';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { ToolLayoutComponent } from '../tool-layout.component';
+import {
+  detectProductSettings,
+  parseOrderLineItem,
+  type ProductSetting,
+} from './uber-eats-settlement.logic';
 
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
-
-interface ProductSetting {
-  isBogo: boolean;
-  isGift: boolean;
-  bogoLimit: number | null;
-}
 
 interface OrderItem {
   storeName: string;
@@ -67,9 +69,10 @@ type SplitMethod = 'proportional' | 'flat';
     MatButtonModule,
     MatIconModule,
     MatCardModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
+    MatOptionModule,
+    UiTextareaFieldComponent,
+    UiTextFieldComponent,
+    UiSelectFieldComponent,
     MatTooltipModule,
     MatChipsModule,
     MatDividerModule,
@@ -90,17 +93,14 @@ type SplitMethod = 'proportional' | 'flat';
               從瀏覽器開發者工具 Network 頁籤找到 <code>getActiveOrdersV1</code> 請求，複製 Response 內容貼入。
             </mat-card-subtitle>
           </mat-card-header>
-          <mat-card-content>
-            <mat-form-field appearance="outline" class="full-width json-field">
-              <mat-label>getActiveOrdersV1 Response JSON</mat-label>
-              <textarea
-                matInput
-                [(ngModel)]="rawJson"
-                rows="7"
-                placeholder='{ "data": { "orders": [...] } }'
-                spellcheck="false"
-              ></textarea>
-            </mat-form-field>
+          <mat-card-content class="tool-form-shell">
+            <ui-textarea-field
+              class="full-width json-field"
+              label="getActiveOrdersV1 Response JSON"
+              [(ngModel)]="rawJson"
+              [rows]="7"
+              placeholder='{ "data": { "orders": [...] } }'
+            />
 
             @if (parseError()) {
               <div class="error-container">
@@ -164,28 +164,31 @@ type SplitMethod = 'proportional' | 'flat';
 
           <!-- 分攤設定 -->
           <mat-card appearance="outlined" class="config-card">
-            <mat-card-content>
+            <mat-card-content class="tool-form-shell">
               <div class="config-row">
-                <mat-form-field appearance="outline" class="config-field">
-                  <mat-label>全單折扣 ($)</mat-label>
-                  <input matInput type="number" [(ngModel)]="globalDiscount" (ngModelChange)="recalculate()" min="0">
-                  <mat-icon matPrefix>local_offer</mat-icon>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="config-field">
-                  <mat-label>運費 / 雜費 ($)</mat-label>
-                  <input matInput type="number" [(ngModel)]="deliveryFee" (ngModelChange)="recalculate()" min="0">
-                  <mat-icon matPrefix>delivery_dining</mat-icon>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="config-field">
-                  <mat-label>分攤方式</mat-label>
-                  <mat-select [(ngModel)]="splitMethod" (ngModelChange)="recalculate()">
-                    <mat-option value="proportional">按金額比例</mat-option>
-                    <mat-option value="flat">按人頭平攤</mat-option>
-                  </mat-select>
-                  <mat-icon matPrefix>calculate</mat-icon>
-                </mat-form-field>
+                <ui-text-field
+                  class="config-field"
+                  label="全單折扣 ($)"
+                  type="number"
+                  [(ngModel)]="globalDiscount"
+                  (ngModelChange)="recalculate()"
+                />
+                <ui-text-field
+                  class="config-field"
+                  label="運費 / 雜費 ($)"
+                  type="number"
+                  [(ngModel)]="deliveryFee"
+                  (ngModelChange)="recalculate()"
+                />
+                <ui-select-field
+                  class="config-field"
+                  label="分攤方式"
+                  [(ngModel)]="splitMethod"
+                  (ngModelChange)="recalculate()"
+                >
+                  <mat-option value="proportional">按金額比例</mat-option>
+                  <mat-option value="flat">按人頭平攤</mat-option>
+                </ui-select-field>
               </div>
             </mat-card-content>
           </mat-card>
@@ -479,7 +482,14 @@ type SplitMethod = 'proportional' | 'flat';
     .store-item { display: flex; align-items: center; gap: 12px; }
     .store-name { font-size: 1.25rem; font-weight: 700; color: color-mix(in srgb, currentColor 80%, transparent); }
     .config-card { margin-bottom: 20px; }
-    .config-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding-top: 8px; }
+    .config-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding-top: 8px;
+    }
+    .config-field { flex: 1 1 180px; min-width: 160px; }
     .config-field { flex: 1; min-width: 160px; }
     
     /* Stats Row & Cards Modern Glassmorphic Styling */
@@ -1026,147 +1036,14 @@ export class UberEatsSettlementComponent {
       const items = (section['items'] as Array<Record<string, unknown>>) || [];
       
       items.forEach(item => {
-        // 1. 原始標價
-        const rawPriceStr = (item['price'] as string) || '$0';
-        const originalPrice = parseFloat(rawPriceStr.replace(/[^\d.]/g, '')) || 0;
-        
-        // 2. 從 subtitle 提取加料金額
-        const subtitle = (item['subtitle'] as string) || '';
-        let unitCustomization = 0;
-        const customMatches = subtitle.match(/\(\$(\d+\.?\d*)\)/g);
-        if (customMatches) {
-          customMatches.forEach(m => {
-            unitCustomization += parseFloat(m.replace(/[^\d.]/g, '')) || 0;
-          });
-        }
-
-        const quantity = (item['quantity'] as number) || 1;
-        const totalCustomizationPrice = unitCustomization * quantity;
-        const totalBasePrice = originalPrice - totalCustomizationPrice;
-        const unitBasePrice = quantity > 0 ? totalBasePrice / quantity : 0;
-
-        // 3. 折扣判斷
-        const discountObj = item['itemDiscount'] as Record<string, unknown> | undefined;
-        let finalPayablePrice = originalPrice;
-        let explicitDiscount = 0;
-
-        if (discountObj) {
-          const discountVal = parseFloat(((discountObj['formattedAmount'] as string) || '0').replace(/[^\d.]/g, ''));
-          
-          // 語意判斷：
-          // Uber 的 itemDiscount 在兩種情境下含義不同：
-          // A) 「最終應付金額」：適用於 8折、滿額送等（如 $120→$96, $80→$10）
-          // B) 「折扣金額」：適用於買一送一等（如 $110-$60=$50/2杯）
-          //
-          // 判斷依據：如果 (原價 - discountVal) 的每杯均價 < $5，
-          // 代表用「折扣金額」算出來不合理，改用「最終應付金額」。
-          const priceAfterDiscount = originalPrice - discountVal;
-          const perUnitAfterDiscount = priceAfterDiscount / quantity;
-
-          if (perUnitAfterDiscount < 5 || priceAfterDiscount < 0) {
-            // 語意 A：discountVal 是「最終應付金額」
-            finalPayablePrice = discountVal;
-            explicitDiscount = originalPrice - discountVal;
-          } else {
-            // 語意 B：discountVal 是「折扣金額」，最終應付 = 原價 - 折扣
-            finalPayablePrice = priceAfterDiscount;
-            explicitDiscount = discountVal;
-          }
-        }
-
-        results.push({
-          storeName, buyer,
-          itemName: (item['title'] as string) || '未名品項',
-          quantity: quantity,
-          price: originalPrice,
-          customizationPrice: totalCustomizationPrice,
-          explicitDiscount,
-          finalPayable: finalPayablePrice,
-          originalPayable: finalPayablePrice,
-          unitBasePrice: unitBasePrice
-        });
+        results.push(parseOrderLineItem(item, storeName, buyer));
       });
     });
     return results;
   }
 
   performAutoDetection(items: OrderItem[]): void {
-    const titleGroups: Record<string, {
-      totalQty: number;
-      hasDiscountRow: boolean;
-      maxDiscountRatio: number;
-      maxQty: number;
-      maxPrice: number;
-      customizationPrice: number;
-      hasGiftKeyword: boolean;
-      minImpliedPayable: number;
-    }> = {};
-    
-    items.forEach(item => {
-      const title = item.itemName;
-      const isGiftKeyword = /送|贈|gift|free/i.test(title);
-      
-      if (!titleGroups[title]) {
-        titleGroups[title] = {
-          totalQty: 0,
-          hasDiscountRow: false,
-          maxDiscountRatio: 0,
-          maxQty: 0,
-          maxPrice: 0,
-          customizationPrice: 0,
-          hasGiftKeyword: isGiftKeyword,
-          minImpliedPayable: 999999
-        };
-      }
-      
-      const group = titleGroups[title];
-      group.totalQty += item.quantity;
-      if (item.quantity > group.maxQty) {
-        group.maxQty = item.quantity;
-      }
-      if (item.price > group.maxPrice) {
-        group.maxPrice = item.price;
-        group.customizationPrice = item.customizationPrice;
-      }
-      if (item.explicitDiscount > 0) {
-        group.hasDiscountRow = true;
-        const ratio = item.explicitDiscount / item.price;
-        if (ratio > group.maxDiscountRatio) {
-          group.maxDiscountRatio = ratio;
-        }
-      }
-      
-      const impliedPayable = item.price - item.explicitDiscount;
-      if (impliedPayable < group.minImpliedPayable) {
-        group.minImpliedPayable = impliedPayable;
-      }
-    });
-
-    const settings = { ...this.productSettings() };
-
-    Object.keys(titleGroups).forEach(title => {
-      const g = titleGroups[title];
-      
-      if (settings[title]) return;
-
-      let isGift = false;
-      let isBogo = false;
-
-      const isExplicitBaseFree = g.maxQty === 1 && g.hasDiscountRow && Math.abs(g.maxPrice - g.customizationPrice - g.maxDiscountRatio * g.maxPrice) < 0.01;
-      const isCheapImpliedGift = g.maxQty === 1 && g.hasDiscountRow && g.minImpliedPayable < 15;
-      
-      if (g.hasGiftKeyword || isExplicitBaseFree || isCheapImpliedGift) {
-        isGift = true;
-      }
-
-      if (!isGift && g.totalQty >= 2 && g.hasDiscountRow && g.maxDiscountRatio >= 0.4) {
-        isBogo = true;
-      }
-
-      settings[title] = { isBogo, isGift, bogoLimit: null };
-    });
-
-    this.productSettings.set(settings);
+    this.productSettings.set(detectProductSettings(items, this.productSettings()));
   }
 
   toggleProductSetting(itemName: string, field: 'isBogo' | 'isGift'): void {

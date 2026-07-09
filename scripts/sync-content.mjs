@@ -1,66 +1,115 @@
+/**
+ * 內容同步（npm run content 的第一步）：
+ * - blog/index.json ← 掃描 assets/blog/*.md
+ * - README.md 工具列表 ← tools.json
+ */
 import fs from 'fs';
 import path from 'path';
+import { PATHS, resolveFromRoot } from './lib/paths.mjs';
+import { loadTools } from './lib/tools.mjs';
 
-const BLOG_DIR = 'src/assets/blog';
-const SITE_JSON = 'src/assets/data/site.json';
-const README_FILE = 'README.md';
+const BLOG_DIR = resolveFromRoot(PATHS.blogDir);
+const README_PATH = resolveFromRoot(PATHS.readme);
 
-/**
- * 1. 自動掃描並更新 Blog 索引
- */
+function parseFrontmatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  if (!match) {
+    return { body: content, meta: {} };
+  }
+
+  const meta = {};
+  for (const line of match[1].split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon === -1) continue;
+    const key = line.slice(0, colon).trim();
+    let value = line.slice(colon + 1).trim();
+    value = value.replace(/^['"]|['"]$/g, '');
+
+    if (key === 'tags') {
+      meta.tags = value
+        .replace(/^\[|\]$/g, '')
+        .split(',')
+        .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean);
+    } else {
+      meta[key] = value;
+    }
+  }
+
+  return { body: content.slice(match[0].length), meta };
+}
+
 function syncBlog() {
-  const files = fs.readdirSync(BLOG_DIR)
-    .filter(f => f.endsWith('.md'))
-    .map(f => {
-      const content = fs.readFileSync(path.join(BLOG_DIR, f), 'utf-8');
-      const stats = fs.statSync(path.join(BLOG_DIR, f));
-      
-      // 提取第一個 # 標題
-      const titleMatch = content.match(/^#\s+(.+)$/m);
-      const title = titleMatch ? titleMatch[1] : f.replace('.md', '');
-      
+  if (!fs.existsSync(BLOG_DIR)) {
+    fs.mkdirSync(BLOG_DIR, { recursive: true });
+  }
+
+  const files = fs
+    .readdirSync(BLOG_DIR)
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => {
+      const filePath = path.join(BLOG_DIR, f);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const stats = fs.statSync(filePath);
+      const { body, meta } = parseFrontmatter(content);
+      const slug = f.replace(/\.md$/, '');
+
+      const titleMatch = body.match(/^#\s+(.+)$/m);
+      const title = meta.title ?? (titleMatch ? titleMatch[1] : slug);
+      const date =
+        meta.date ?? stats.mtime.toISOString().split('T')[0];
+      const summary =
+        meta.summary ??
+        body.substring(0, 100).replace(/#+\s/g, '').replace(/\n/g, ' ').trim() +
+          '...';
+
       return {
-        id: f.replace('.md', ''),
-        title: title,
-        date: stats.mtime.toISOString().split('T')[0],
-        summary: content.substring(0, 100).replace(/#+\s/g, '').replace(/\n/g, ' ') + '...'
+        slug,
+        title,
+        date,
+        tags: Array.isArray(meta.tags) ? meta.tags : [],
+        summary,
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  fs.writeFileSync(path.join(BLOG_DIR, 'index.json'), JSON.stringify(files, null, 2));
-  console.log('✅ Blog 索引已自動更新');
+  fs.writeFileSync(
+    path.join(BLOG_DIR, 'index.json'),
+    `${JSON.stringify(files, null, 2)}\n`,
+    'utf-8'
+  );
+  console.log(`✅ Blog 索引已更新（${files.length} 篇）`);
 }
 
-/**
- * 2. 根據 site.json 自動同步 README.md
- */
 function syncReadme() {
-  const siteData = JSON.parse(fs.readFileSync(SITE_JSON, 'utf-8'));
-  let readmeContent = fs.readFileSync(README_FILE, 'utf-8');
+  const tools = loadTools();
+  let readmeContent = fs.readFileSync(README_PATH, 'utf-8');
 
-  const toolsList = siteData.tools.map((t, i) => {
-    return `${i + 1}. **${t.name}**：${t.description}`;
-  }).join('\n');
+  const toolsList = tools
+    .map((t, i) => `${i + 1}. **${t.name}**：${t.description}`)
+    .join('\n');
 
-  // 使用正則表達式尋找標籤區塊並替換
   const startMarker = '## 🛠️ 目前已集成的工具';
-  const endMarker = '## 🚀 技術棧';
-  
-  const regex = new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`);
-  const newSection = `${startMarker}\n\n${toolsList}\n\n${endMarker}`;
-  
+  const endMarker = '## 📦 內容與維護';
+  const legacyEndMarker = '## 🚀 技術棧';
+  const end = readmeContent.includes(endMarker) ? endMarker : legacyEndMarker;
+
+  const regex = new RegExp(`${startMarker}[\\s\\S]*?(?=${end})`);
+  const newSection = `${startMarker}\n\n${toolsList}\n\n`;
+
   if (readmeContent.match(regex)) {
     readmeContent = readmeContent.replace(regex, newSection);
-    fs.writeFileSync(README_FILE, readmeContent);
+    fs.writeFileSync(README_PATH, readmeContent, 'utf-8');
     console.log('✅ README.md 工具列表已同步');
+  } else {
+    console.warn('⚠️ README.md 找不到工具區塊標記，略過同步');
   }
 }
 
-// 執行
 try {
   syncBlog();
   syncReadme();
 } catch (e) {
-  console.error('❌ 自動化腳本執行失敗:', e);
+  console.error('❌ sync-content 失敗:', e);
+  process.exit(1);
 }

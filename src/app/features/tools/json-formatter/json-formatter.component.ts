@@ -2,8 +2,7 @@ import { Component, signal, inject, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { UiTextareaFieldComponent } from '../../../shared/components/form-primitives';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -17,8 +16,7 @@ import { JsonNodeComponent } from './json-node.component';
     FormsModule,
     MatButtonModule,
     MatIconModule,
-    MatFormFieldModule,
-    MatInputModule,
+    UiTextareaFieldComponent,
     MatCardModule,
     MatSnackBarModule,
     MatTabsModule,
@@ -33,16 +31,14 @@ import { JsonNodeComponent } from './json-node.component';
       
       <div class="formatter-container">
         <!-- 左側輸入區 -->
-        <div class="input-panel">
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>原始 JSON 內容</mat-label>
-            <textarea matInput
-                      [(ngModel)]="inputJson"
-                      rows="20"
-                      placeholder='在此貼入您的 JSON...'
-                      spellcheck="false">
-            </textarea>
-          </mat-form-field>
+        <div class="input-panel tool-form-shell">
+          <ui-textarea-field
+            class="full-width"
+            label="原始 JSON 內容"
+            [(ngModel)]="inputJson"
+            [rows]="20"
+            placeholder="在此貼入您的 JSON..."
+          />
 
           <div class="actions">
             <button mat-raised-button color="primary" (click)="process()">
@@ -112,7 +108,7 @@ import { JsonNodeComponent } from './json-node.component';
   styles: [`
     .formatter-container {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 24px;
       align-items: start;
     }
@@ -126,6 +122,15 @@ import { JsonNodeComponent } from './json-node.component';
     .input-panel {
       position: sticky;
       top: 24px;
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .input-panel ui-textarea-field {
+      flex: 1 1 auto;
+      min-height: 320px;
     }
 
     .actions {

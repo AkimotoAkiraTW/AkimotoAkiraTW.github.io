@@ -6,8 +6,11 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "content": "node scripts/sync-content.mjs && node scripts/validate-content.mjs",
     "sync": "node scripts/sync-content.mjs",
-    "build": "node scripts/sync-content.mjs && ng build --configuration production",
+    "validate": "node scripts/validate-content.mjs",
+    "tool:create": "node scripts/tool-create.mjs",
+    "build": "npm run content && ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -25,6 +28,7 @@
     "@angular/router": "^21.0.0",
     "@angular/service-worker": "^21.0.0",
     "@types/qrcode": "^1.5.6",
+    "dexie": "^4.4.2",
     "marked": "^15.0.0",
     "mermaid": "^11.4.1",
     "prismjs": "^1.29.0",

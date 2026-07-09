@@ -16,7 +16,7 @@ import { ToolEntry } from '../models/tool.model';
  * 資料來源：
  *   - assets/data/resume.json    → 履歷資料
  *   - assets/data/portfolio.json → 作品集資料
- *   - assets/data/tools.json     → 工具箱清單
+ *   - assets/data/tools.json     → 工具箱清單（單一事實來源）
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @Injectable({ providedIn: 'root' })

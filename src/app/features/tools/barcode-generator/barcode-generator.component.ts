@@ -8,11 +8,14 @@ import {
   afterNextRender,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { MatOptionModule } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
+import {
+  UiSelectFieldComponent,
+  UiTextFieldComponent,
+  UiTextareaFieldComponent,
+} from '../../../shared/components/form-primitives';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -62,11 +65,12 @@ interface SmsData {
   standalone: true,
   imports: [
     FormsModule,
-    MatFormFieldModule,
-    MatInputModule,
+    MatOptionModule,
+    UiTextFieldComponent,
+    UiTextareaFieldComponent,
+    UiSelectFieldComponent,
     MatButtonModule,
     MatIconModule,
-    MatSelectModule,
     MatExpansionModule,
     MatTooltipModule,
     MatSnackBarModule,
@@ -81,7 +85,7 @@ interface SmsData {
       <div class="generator-layout">
 
         <!-- ═══════════════ LEFT: Controls ═══════════════ -->
-        <div class="controls-panel">
+        <div class="controls-panel tool-form-shell">
 
           <!-- ── Mode Selector ── -->
           <div class="mode-selector">
@@ -114,48 +118,56 @@ interface SmsData {
             <!-- Dynamic Template Forms -->
             @switch (qrTemplate()) {
               @case ('text') {
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>文字或網址</mat-label>
-                  <textarea matInput rows="4"
-                    placeholder="輸入任意文字或 https://..."
-                    [(ngModel)]="textContent"
-                    (ngModelChange)="scheduleRender()">
-                  </textarea>
-                  <mat-hint>{{ textContent.length }} 字元</mat-hint>
-                </mat-form-field>
+                <ui-textarea-field
+                  class="full-width"
+                  label="文字或網址"
+                  [rows]="4"
+                  placeholder="輸入任意文字或 https://..."
+                  [(ngModel)]="textContent"
+                  (ngModelChange)="scheduleRender()"
+                  [hint]="textContent.length + ' 字元'"
+                />
               }
               @case ('url') {
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>網址 (URL)</mat-label>
-                  <input matInput type="url" placeholder="https://example.com"
-                    [(ngModel)]="urlContent"
-                    (ngModelChange)="scheduleRender()">
-                  <mat-icon matPrefix>link</mat-icon>
-                </mat-form-field>
+                <ui-text-field
+                  class="full-width"
+                  label="網址 (URL)"
+                  type="url"
+                  placeholder="https://example.com"
+                  [(ngModel)]="urlContent"
+                  (ngModelChange)="scheduleRender()"
+                />
               }
               @case ('wifi') {
                 <div class="form-group">
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>Wi-Fi 名稱 (SSID)</mat-label>
-                    <input matInput [(ngModel)]="wifi.ssid" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>wifi</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>密碼</mat-label>
-                    <input matInput [type]="showWifiPwd ? 'text' : 'password'"
-                      [(ngModel)]="wifi.password" (ngModelChange)="scheduleRender()">
-                    <button mat-icon-button matSuffix (click)="showWifiPwd = !showWifiPwd">
+                  <ui-text-field
+                    class="full-width"
+                    label="Wi-Fi 名稱 (SSID)"
+                    [(ngModel)]="wifi.ssid"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <div class="password-row">
+                    <ui-text-field
+                      class="full-width"
+                      label="密碼"
+                      [type]="showWifiPwd ? 'text' : 'password'"
+                      [(ngModel)]="wifi.password"
+                      (ngModelChange)="scheduleRender()"
+                    />
+                    <button mat-icon-button type="button" class="pwd-toggle" (click)="showWifiPwd = !showWifiPwd">
                       <mat-icon>{{ showWifiPwd ? 'visibility_off' : 'visibility' }}</mat-icon>
                     </button>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>加密類型</mat-label>
-                    <mat-select [(ngModel)]="wifi.encryption" (ngModelChange)="scheduleRender()">
-                      <mat-option value="WPA">WPA/WPA2</mat-option>
-                      <mat-option value="WEP">WEP</mat-option>
-                      <mat-option value="nopass">無密碼</mat-option>
-                    </mat-select>
-                  </mat-form-field>
+                  </div>
+                  <ui-select-field
+                    class="full-width"
+                    label="加密類型"
+                    [(ngModel)]="wifi.encryption"
+                    (ngModelChange)="scheduleRender()"
+                  >
+                    <mat-option value="WPA">WPA/WPA2</mat-option>
+                    <mat-option value="WEP">WEP</mat-option>
+                    <mat-option value="nopass">無密碼</mat-option>
+                  </ui-select-field>
                   <label class="checkbox-label">
                     <input type="checkbox" [(ngModel)]="wifi.hidden" (ngModelChange)="scheduleRender()">
                     <span>隱藏 Wi-Fi 網路</span>
@@ -164,71 +176,93 @@ interface SmsData {
               }
               @case ('vcard') {
                 <div class="form-group">
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>姓名</mat-label>
-                    <input matInput [(ngModel)]="vcard.name" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>person</mat-icon>
-                  </mat-form-field>
+                  <ui-text-field
+                    class="full-width"
+                    label="姓名"
+                    [(ngModel)]="vcard.name"
+                    (ngModelChange)="scheduleRender()"
+                  />
                   <div class="form-row">
-                    <mat-form-field appearance="outline">
-                      <mat-label>公司</mat-label>
-                      <input matInput [(ngModel)]="vcard.org" (ngModelChange)="scheduleRender()">
-                    </mat-form-field>
-                    <mat-form-field appearance="outline">
-                      <mat-label>職稱</mat-label>
-                      <input matInput [(ngModel)]="vcard.title" (ngModelChange)="scheduleRender()">
-                    </mat-form-field>
+                    <ui-text-field
+                      label="公司"
+                      [(ngModel)]="vcard.org"
+                      (ngModelChange)="scheduleRender()"
+                    />
+                    <ui-text-field
+                      label="職稱"
+                      [(ngModel)]="vcard.title"
+                      (ngModelChange)="scheduleRender()"
+                    />
                   </div>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>電話</mat-label>
-                    <input matInput type="tel" [(ngModel)]="vcard.phone" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>phone</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>電子郵件</mat-label>
-                    <input matInput type="email" [(ngModel)]="vcard.email" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>email</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>網站</mat-label>
-                    <input matInput type="url" [(ngModel)]="vcard.url" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>language</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>地址</mat-label>
-                    <input matInput [(ngModel)]="vcard.address" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>location_on</mat-icon>
-                  </mat-form-field>
+                  <ui-text-field
+                    class="full-width"
+                    label="電話"
+                    type="tel"
+                    [(ngModel)]="vcard.phone"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-text-field
+                    class="full-width"
+                    label="電子郵件"
+                    type="email"
+                    [(ngModel)]="vcard.email"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-text-field
+                    class="full-width"
+                    label="網站"
+                    type="url"
+                    [(ngModel)]="vcard.url"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-text-field
+                    class="full-width"
+                    label="地址"
+                    [(ngModel)]="vcard.address"
+                    (ngModelChange)="scheduleRender()"
+                  />
                 </div>
               }
               @case ('email') {
                 <div class="form-group">
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>收件人</mat-label>
-                    <input matInput type="email" [(ngModel)]="emailData.to" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>alternate_email</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>主旨</mat-label>
-                    <input matInput [(ngModel)]="emailData.subject" (ngModelChange)="scheduleRender()">
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>內容</mat-label>
-                    <textarea matInput rows="3" [(ngModel)]="emailData.body" (ngModelChange)="scheduleRender()"></textarea>
-                  </mat-form-field>
+                  <ui-text-field
+                    class="full-width"
+                    label="收件人"
+                    type="email"
+                    [(ngModel)]="emailData.to"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-text-field
+                    class="full-width"
+                    label="主旨"
+                    [(ngModel)]="emailData.subject"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-textarea-field
+                    class="full-width"
+                    label="內容"
+                    [rows]="3"
+                    [(ngModel)]="emailData.body"
+                    (ngModelChange)="scheduleRender()"
+                  />
                 </div>
               }
               @case ('sms') {
                 <div class="form-group">
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>電話號碼</mat-label>
-                    <input matInput type="tel" [(ngModel)]="smsData.phone" (ngModelChange)="scheduleRender()">
-                    <mat-icon matPrefix>sms</mat-icon>
-                  </mat-form-field>
-                  <mat-form-field appearance="outline" class="full-width">
-                    <mat-label>預設訊息</mat-label>
-                    <textarea matInput rows="3" [(ngModel)]="smsData.message" (ngModelChange)="scheduleRender()"></textarea>
-                  </mat-form-field>
+                  <ui-text-field
+                    class="full-width"
+                    label="電話號碼"
+                    type="tel"
+                    [(ngModel)]="smsData.phone"
+                    (ngModelChange)="scheduleRender()"
+                  />
+                  <ui-textarea-field
+                    class="full-width"
+                    label="預設訊息"
+                    [rows]="3"
+                    [(ngModel)]="smsData.message"
+                    (ngModelChange)="scheduleRender()"
+                  />
                 </div>
               }
             }
@@ -274,14 +308,16 @@ interface SmsData {
                         <input type="color" [(ngModel)]="gradientEnd" (ngModelChange)="scheduleRender()">
                       </label>
                     </div>
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>漸層方向</mat-label>
-                      <mat-select [(ngModel)]="gradientDir" (ngModelChange)="scheduleRender()">
-                        <mat-option value="to-bottom">由上而下</mat-option>
-                        <mat-option value="to-right">由左而右</mat-option>
-                        <mat-option value="diagonal">對角線</mat-option>
-                      </mat-select>
-                    </mat-form-field>
+                    <ui-select-field
+                      class="full-width"
+                      label="漸層方向"
+                      [(ngModel)]="gradientDir"
+                      (ngModelChange)="scheduleRender()"
+                    >
+                      <mat-option value="to-bottom">由上而下</mat-option>
+                      <mat-option value="to-right">由左而右</mat-option>
+                      <mat-option value="diagonal">對角線</mat-option>
+                    </ui-select-field>
                   }
 
                   <div class="slider-row">
@@ -343,24 +379,22 @@ interface SmsData {
 
           <!-- ── 2D Barcode Controls ── -->
           @if (barcodeMode() === '2d') {
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>條碼類型</mat-label>
-              <mat-select [(ngModel)]="selected2DType" (ngModelChange)="scheduleRender()">
-                @for (t of types2D; track t.value) {
-                  <mat-option [value]="t.value">{{ t.label }}</mat-option>
-                }
-              </mat-select>
-              <mat-icon matPrefix>view_module</mat-icon>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>條碼內容</mat-label>
-              <textarea matInput rows="4"
-                [(ngModel)]="barcodeContent2D"
-                (ngModelChange)="scheduleRender()"
-                placeholder="輸入要編碼的資料...">
-              </textarea>
-              <mat-hint>{{ barcodeContent2D.length }} 字元</mat-hint>
-            </mat-form-field>
+            <ui-select-field
+              class="full-width"
+              label="條碼類型"
+              [options]="types2D"
+              [(ngModel)]="selected2DType"
+              (ngModelChange)="scheduleRender()"
+            />
+            <ui-textarea-field
+              class="full-width"
+              label="條碼內容"
+              [rows]="4"
+              placeholder="輸入要編碼的資料..."
+              [(ngModel)]="barcodeContent2D"
+              (ngModelChange)="scheduleRender()"
+              [hint]="barcodeContent2D.length + ' 字元'"
+            />
             <div class="info-chip">
               <mat-icon>info</mat-icon>
               <span>{{ get2DInfo(selected2DType) }}</span>
@@ -369,23 +403,21 @@ interface SmsData {
 
           <!-- ── 1D Barcode Controls ── -->
           @if (barcodeMode() === '1d') {
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>條碼類型</mat-label>
-              <mat-select [(ngModel)]="selected1DType" (ngModelChange)="scheduleRender()">
-                @for (t of types1D; track t.value) {
-                  <mat-option [value]="t.value">{{ t.label }}</mat-option>
-                }
-              </mat-select>
-              <mat-icon matPrefix>linear_scale</mat-icon>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>條碼內容</mat-label>
-              <input matInput
-                [(ngModel)]="barcodeContent1D"
-                (ngModelChange)="scheduleRender()"
-                [placeholder]="get1DPlaceholder(selected1DType)">
-              <mat-hint>{{ get1DHint(selected1DType) }}</mat-hint>
-            </mat-form-field>
+            <ui-select-field
+              class="full-width"
+              label="條碼類型"
+              [options]="types1D"
+              [(ngModel)]="selected1DType"
+              (ngModelChange)="scheduleRender()"
+            />
+            <ui-text-field
+              class="full-width"
+              label="條碼內容"
+              [(ngModel)]="barcodeContent1D"
+              (ngModelChange)="scheduleRender()"
+              [placeholder]="get1DPlaceholder(selected1DType)"
+              [hint]="get1DHint(selected1DType)"
+            />
             <div class="info-chip">
               <mat-icon>info</mat-icon>
               <span>{{ get1DInfo(selected1DType) }}</span>
@@ -509,7 +541,7 @@ interface SmsData {
     /* ── Layout ── */
     .generator-layout {
       display: grid;
-      grid-template-columns: 1fr 380px;
+      grid-template-columns: minmax(0, 1fr) 380px;
       gap: 32px;
       align-items: start;
       padding-bottom: 64px;
@@ -588,7 +620,14 @@ interface SmsData {
     /* ── Forms ── */
     .full-width { width: 100%; margin-bottom: 4px; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .password-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .password-row ui-text-field { flex: 1 1 auto; min-width: 0; }
+    .pwd-toggle { margin-top: 8px; flex-shrink: 0; }
     .checkbox-label {
       display: flex; align-items: center; gap: 10px;
       font-size: 0.875rem; cursor: pointer; padding: 8px 4px;

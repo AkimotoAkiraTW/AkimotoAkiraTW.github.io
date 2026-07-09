@@ -14,9 +14,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import { UiTextFieldComponent } from '../../../shared/components/form-primitives';
 import { ToolLayoutComponent } from '../tool-layout.component';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -49,9 +47,7 @@ const HTML5QR_CDN = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
     MatIconModule,
     MatTooltipModule,
     MatSnackBarModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
+    UiTextFieldComponent,
     ToolLayoutComponent,
   ],
   template: `
@@ -167,25 +163,24 @@ const HTML5QR_CDN = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
 
           <!-- Manual Input Mode -->
           @if (scanMode() === 'manual') {
-            <div class="manual-input-area">
+            <div class="manual-input-area tool-form-shell">
               <div class="manual-icon">
                 <mat-icon>keyboard</mat-icon>
               </div>
               <p class="manual-hint">輸入或貼上條碼值，按 Enter 或點擊「新增」</p>
-              <div class="manual-form">
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>條碼值</mat-label>
-                  <input matInput #manualInput
-                    [(ngModel)]="manualBarcode"
-                    (keydown.enter)="submitManual()"
-                    placeholder="在此輸入或貼上條碼..."
-                    autocomplete="off">
-                  <mat-icon matPrefix>qr_code</mat-icon>
-                </mat-form-field>
-                <mat-form-field appearance="outline" style="width: 120px; flex-shrink: 0;">
-                  <mat-label>數量</mat-label>
-                  <input matInput type="number" min="1" [(ngModel)]="manualQty">
-                </mat-form-field>
+              <div class="manual-form" (keydown.enter)="submitManual()">
+                <ui-text-field
+                  class="full-width"
+                  label="條碼值"
+                  [(ngModel)]="manualBarcode"
+                  placeholder="在此輸入或貼上條碼..."
+                />
+                <ui-text-field
+                  class="qty-field"
+                  label="數量"
+                  type="number"
+                  [(ngModel)]="manualQty"
+                />
                 <button mat-flat-button color="primary" (click)="submitManual()"
                   [disabled]="!manualBarcode.trim()">
                   <mat-icon>add</mat-icon> 新增
@@ -289,17 +284,20 @@ const HTML5QR_CDN = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
           </div>
 
           <!-- Search -->
-          <div class="search-row">
-            <mat-form-field appearance="outline" class="full-width search-field">
-              <mat-label>搜尋條碼</mat-label>
-              <input matInput [(ngModel)]="searchQuery" placeholder="輸入關鍵字過濾...">
-              <mat-icon matPrefix>search</mat-icon>
+          <div class="search-row tool-form-shell">
+            <div class="search-field-row">
+              <ui-text-field
+                class="full-width search-field"
+                label="搜尋條碼"
+                [(ngModel)]="searchQuery"
+                placeholder="輸入關鍵字過濾..."
+              />
               @if (searchQuery) {
-                <button matSuffix mat-icon-button (click)="searchQuery = ''">
+                <button mat-icon-button type="button" class="search-clear" (click)="searchQuery = ''" aria-label="清除搜尋">
                   <mat-icon>close</mat-icon>
                 </button>
               }
-            </mat-form-field>
+            </div>
           </div>
 
           <!-- Records List -->
@@ -614,7 +612,16 @@ const HTML5QR_CDN = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
       mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.3; }
     }
     .manual-hint { text-align: center; font-size: 0.875rem; opacity: 0.6; margin: 0; }
-    .manual-form { display: flex; gap: 10px; align-items: flex-start; }
+    .manual-form { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+    .manual-form .qty-field { width: 120px; flex: 0 0 120px; }
+    .manual-form ui-text-field.full-width { flex: 1 1 200px; min-width: 0; }
+    .search-field-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .search-field-row ui-text-field { flex: 1 1 auto; min-width: 0; }
+    .search-clear { margin-top: 8px; flex-shrink: 0; }
     .full-width { width: 100%; }
 
     /* ── Settings Section ── */

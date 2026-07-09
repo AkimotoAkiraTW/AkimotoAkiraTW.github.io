@@ -1,0 +1,22 @@
+name: Content check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # sync / validate 僅使用 Node 內建模組，無需 npm ci
+      - name: Sync and validate content
+        run: npm run content

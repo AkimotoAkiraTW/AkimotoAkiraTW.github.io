@@ -9,11 +9,10 @@ import { SITE_CONFIG } from '../../core/config/site.config';
 
 /**
  * ToolsComponent
- * 工具清單從 assets/data/tools.json 動態讀取。
- * 新增工具只需：
- *   1. 建立對應的 component（如 src/app/features/tools/<id>/<id>.component.ts）
- *   2. 在 app.routes.ts 加入對應路由
- *   3. 在 assets/data/tools.json 新增工具的 metadata 條目
+ * 工具清單單一事實來源：assets/data/tools.json
+ * 新增工具：
+ *   npm run tool:create -- <tool-id>
+ *   或手動：component + app.routes.ts + tools.json，再 npm run content
  */
 @Component({
   selector: 'app-tools',

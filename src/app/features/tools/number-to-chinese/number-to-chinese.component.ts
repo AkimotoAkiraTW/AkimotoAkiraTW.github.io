@@ -1,7 +1,6 @@
 import { Component, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
+import { UiTextFieldComponent } from '../../../shared/components/form-primitives';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -14,9 +13,8 @@ import { ToolLayoutComponent } from '../tool-layout.component';
   selector: 'app-number-to-chinese',
   standalone: true,
   imports: [
-    FormsModule, 
-    MatFormFieldModule, 
-    MatInputModule, 
+    FormsModule,
+    UiTextFieldComponent,
     MatButtonModule, 
     MatIconModule, 
     MatCardModule,
@@ -30,20 +28,27 @@ import { ToolLayoutComponent } from '../tool-layout.component';
       
       <div class="tool-card-container">
         <mat-card class="converter-card">
-          <mat-card-content>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>輸入阿拉伯數字</mat-label>
-              <input matInput type="text" 
-                     inputmode="decimal"
-                     placeholder="例如: 12345" 
-                     [value]="inputNumber()" 
-                     (input)="handleInput($any($event.target).value)"
-                     maxlength="19">
-              <button mat-icon-button matSuffix (click)="inputNumber.set('')">
+          <mat-card-content class="tool-form-shell">
+            <div class="input-row">
+              <ui-text-field
+                class="full-width"
+                label="輸入阿拉伯數字"
+                [ngModel]="inputNumber()"
+                (ngModelChange)="handleInput($event)"
+                placeholder="例如: 12345"
+                hint="上限 15 位整數與 2 位小數，支援負數"
+              />
+              <button
+                mat-icon-button
+                type="button"
+                class="clear-btn"
+                (click)="inputNumber.set('')"
+                [disabled]="!inputNumber()"
+                aria-label="清除"
+              >
                 <mat-icon>close</mat-icon>
               </button>
-              <mat-hint>上限 15 位整數與 2 位小數，支援負數</mat-hint>
-            </mat-form-field>
+            </div>
 
             @if (formattedInput()) {
               <div class="formatted-preview">
@@ -100,8 +105,22 @@ import { ToolLayoutComponent } from '../tool-layout.component';
       background: color-mix(in srgb, currentColor 2%, transparent);
       border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
     }
-    .full-width {
-      width: 100%;
+    .full-width { width: 100%; }
+
+    .input-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .input-row ui-text-field {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .clear-btn {
+      margin-top: 8px;
+      flex-shrink: 0;
     }
     .formatted-preview {
       font-size: 1.15rem;
@@ -198,8 +217,8 @@ export class NumberToChineseComponent {
   private snackBar = inject(MatSnackBar);
 
   /** 處理輸入攔截與限制 */
-  handleInput(value: string) {
-    let clean = value.replace(/[^0-9.-]/g, '');
+  handleInput(value: string | number | null) {
+    let clean = String(value ?? '').replace(/[^0-9.-]/g, '');
     const isNegative = clean.startsWith('-');
     clean = clean.replace(/-/g, '');
     if (isNegative) clean = '-' + clean;

@@ -6,9 +6,11 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
+import { MatOptionModule } from '@angular/material/core';
+import {
+  UiSelectFieldComponent,
+  UiTextFieldComponent,
+} from '../../../shared/components/form-primitives';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ToolLayoutComponent } from '../tool-layout.component';
 import { MediaParserService, MediaRecord } from './media-parser.service';
@@ -21,7 +23,7 @@ const PAGE_SIZE = 50;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule, MatButtonModule, MatIconModule, MatCardModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule,
+    MatOptionModule, UiSelectFieldComponent, UiTextFieldComponent, MatTooltipModule,
     ToolLayoutComponent,
   ],
   template: `
@@ -131,40 +133,33 @@ const PAGE_SIZE = 50;
 
       <!-- 篩選控制 -->
       <mat-card appearance="outlined" class="filter-card">
-        <mat-card-content>
+        <mat-card-content class="tool-form-shell">
           <div class="filter-row">
-            <mat-form-field appearance="outline" class="filter-field">
-              <mat-label>期別</mat-label>
-              <mat-select [(ngModel)]="filterPeriod" (ngModelChange)="applyFilter()">
-                <mat-option value="all">全部期別</mat-option>
-                @for (p of periods(); track p) {
-                  <mat-option [value]="p">{{ p }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="filter-field">
-              <mat-label>類型</mat-label>
-              <mat-select [(ngModel)]="filterType" (ngModelChange)="applyFilter()">
-                <mat-option value="all">全部</mat-option>
-                <mat-option value="b2c">自然人(B2C)</mat-option>
-                <mat-option value="b2b">法人(B2B)</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="filter-field">
-              <mat-label>課稅別</mat-label>
-              <mat-select [(ngModel)]="filterTax" (ngModelChange)="applyFilter()">
-                <mat-option value="all">全部</mat-option>
-                <mat-option value="1">應稅</mat-option>
-                <mat-option value="2">零稅率</mat-option>
-                <mat-option value="3">免稅</mat-option>
-                <mat-option value="F">作廢</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="filter-field search-field">
-              <mat-label>搜尋</mat-label>
-              <mat-icon matPrefix>search</mat-icon>
-              <input matInput [(ngModel)]="searchText" (ngModelChange)="applyFilter()" placeholder="發票號碼 / 統編">
-            </mat-form-field>
+            <ui-select-field class="filter-field" label="期別" [(ngModel)]="filterPeriod" (ngModelChange)="applyFilter()">
+              <mat-option value="all">全部期別</mat-option>
+              @for (p of periods(); track p) {
+                <mat-option [value]="p">{{ p }}</mat-option>
+              }
+            </ui-select-field>
+            <ui-select-field class="filter-field" label="類型" [(ngModel)]="filterType" (ngModelChange)="applyFilter()">
+              <mat-option value="all">全部</mat-option>
+              <mat-option value="b2c">自然人(B2C)</mat-option>
+              <mat-option value="b2b">法人(B2B)</mat-option>
+            </ui-select-field>
+            <ui-select-field class="filter-field" label="課稅別" [(ngModel)]="filterTax" (ngModelChange)="applyFilter()">
+              <mat-option value="all">全部</mat-option>
+              <mat-option value="1">應稅</mat-option>
+              <mat-option value="2">零稅率</mat-option>
+              <mat-option value="3">免稅</mat-option>
+              <mat-option value="F">作廢</mat-option>
+            </ui-select-field>
+            <ui-text-field
+              class="filter-field search-field"
+              label="搜尋"
+              [(ngModel)]="searchText"
+              (ngModelChange)="applyFilter()"
+              placeholder="發票號碼 / 統編"
+            />
             <span class="result-count">共 {{ filteredRows().length }} 筆</span>
             <button mat-stroked-button (click)="svc.exportCsv(filteredRows(), generalRatePct/100, specialRatePct/100)">
               <mat-icon>download</mat-icon> 匯出 CSV
