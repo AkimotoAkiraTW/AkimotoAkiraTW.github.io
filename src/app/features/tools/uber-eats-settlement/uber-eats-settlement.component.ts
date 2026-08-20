@@ -4,9 +4,10 @@ import {
   computed,
   inject,
   ChangeDetectionStrategy,
+  viewChild,
+  ElementRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -16,17 +17,21 @@ import {
   UiTextareaFieldComponent,
   UiTextFieldComponent,
 } from '../../../shared/components/form-primitives';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatDividerModule } from '@angular/material/divider';
 import { ToolLayoutComponent } from '../tool-layout.component';
 import {
   detectProductSettings,
   parseOrderLineItem,
   type ProductSetting,
 } from './uber-eats-settlement.logic';
+import {
+  copyPngToClipboard,
+  downloadPng,
+  elementToPng,
+  stampFilename,
+} from './capture-element';
 
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
 
@@ -75,7 +80,7 @@ type SplitMethod = 'proportional' | 'flat';
     UiSelectFieldComponent,
     MatTooltipModule,
     MatChipsModule,
-    MatDividerModule,
+    MatSnackBarModule,
     ToolLayoutComponent,
   ],
   template: `
@@ -230,7 +235,74 @@ type SplitMethod = 'proportional' | 'flat';
             </div>
           }
 
+          <div class="share-toolbar no-capture">
+            <button
+              mat-stroked-button
+              (click)="captureSummary()"
+              [disabled]="capturing() !== 'idle'"
+              matTooltip="將每人小計區塊轉成圖片，並嘗試複製到剪貼簿">
+              <mat-icon>{{ capturing() === 'summary' ? 'hourglass_top' : 'photo_camera' }}</mat-icon>
+              截圖小計
+            </button>
+            <button
+              mat-stroked-button
+              (click)="copySummaryText()"
+              matTooltip="複製每人應付文字，方便貼到 LINE">
+              <mat-icon>content_copy</mat-icon>
+              複製文字
+            </button>
+            <button
+              mat-stroked-button
+              (click)="captureOrderList()"
+              [disabled]="capturing() !== 'idle'"
+              matTooltip="將訂單明細轉成圖片（不含覆寫按鈕）">
+              <mat-icon>{{ capturing() === 'list' ? 'hourglass_top' : 'image' }}</mat-icon>
+              截圖明細
+            </button>
+            <button mat-stroked-button (click)="exportCsv()">
+              <mat-icon>download</mat-icon>
+              匯出 CSV
+            </button>
+          </div>
+
+          <mat-card appearance="outlined" class="summary-card">
+            <div #summaryCapture class="share-capture">
+              <div class="share-meta">
+                <div>
+                  <div class="share-kicker">Uber Eats 對帳</div>
+                  <div class="share-stores">{{ shareMeta().stores }}</div>
+                </div>
+                <time class="share-date">{{ shareMeta().date }}</time>
+              </div>
+              <div class="summary-grid">
+                @for (entry of buyerSummary(); track entry.buyer + entry.storeName) {
+                  <div class="summary-item">
+                    <div class="summary-buyer">
+                      <span class="summary-store">{{ entry.storeName }}</span>
+                      <span class="summary-name">{{ entry.buyer }}</span>
+                    </div>
+                    <div class="summary-right">
+                      <span class="summary-items">{{ entry.itemCount }} 件</span>
+                      <span class="summary-amount">{{ fmt(entry.total) }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+              <div class="share-totals">
+                <div class="share-total-row">
+                  <span>對帳總和</span>
+                  <span>{{ fmt(stats().checkSum) }}</span>
+                </div>
+                <div class="share-total-row">
+                  <span>Uber 實付</span>
+                  <span>{{ fmt(stats().jsonTotal) }}</span>
+                </div>
+              </div>
+            </div>
+          </mat-card>
+
           <!-- 訂單明細表 -->
+          <div #orderListCapture class="order-list-capture">
           @if (viewMode() === 'table') {
             <mat-card appearance="outlined" class="table-card">
               <mat-card-content>
@@ -271,7 +343,7 @@ type SplitMethod = 'proportional' | 'flat';
                                   </span>
                                 }
                               </div>
-                              <div class="product-toggles">
+                              <div class="product-toggles no-capture">
                                 <span class="toggle-label">覆寫屬性:</span>
                                 <button 
                                   type="button"
@@ -329,37 +401,6 @@ type SplitMethod = 'proportional' | 'flat';
                   </table>
                 </div>
               </mat-card-content>
-              <mat-divider></mat-divider>
-              <mat-card-actions align="end">
-                <button mat-stroked-button (click)="exportCsv()">
-                  <mat-icon>download</mat-icon> 匯出 CSV
-                </button>
-              </mat-card-actions>
-            </mat-card>
- 
-            <!-- 每人小計 -->
-            <mat-card appearance="outlined" class="summary-card">
-              <mat-card-header>
-                <mat-icon mat-card-avatar>people</mat-icon>
-                <mat-card-title>每人應付小計</mat-card-title>
-                <mat-card-subtitle>各成員在本次訂單中的應付總金額</mat-card-subtitle>
-              </mat-card-header>
-              <mat-card-content>
-                <div class="summary-grid">
-                  @for (entry of buyerSummary(); track entry.buyer) {
-                    <div class="summary-item">
-                      <div class="summary-buyer">
-                        <span class="summary-store">{{ entry.storeName }}</span>
-                        <span class="summary-name">{{ entry.buyer }}</span>
-                      </div>
-                      <div class="summary-right">
-                        <span class="summary-items">{{ entry.itemCount }} 件</span>
-                        <span class="summary-amount">{{ fmt(entry.total) }}</span>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </mat-card-content>
             </mat-card>
           } @else {
             <!-- 卡片模式 -->
@@ -387,7 +428,7 @@ type SplitMethod = 'proportional' | 'flat';
                           <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
                         }
                       </div>
-                      <div class="product-toggles card-toggles">
+                      <div class="product-toggles card-toggles no-capture">
                         <button 
                           type="button"
                           class="badge-toggle-btn bogo-toggle"
@@ -444,12 +485,8 @@ type SplitMethod = 'proportional' | 'flat';
                 </mat-card>
               }
             </div>
-            <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
-              <button mat-raised-button color="primary" (click)="exportCsv()">
-                <mat-icon>download</mat-icon> 匯出 CSV
-              </button>
-            </div>
           }
+          </div>
         }
       </div>
     </app-tool-layout>
@@ -558,7 +595,53 @@ type SplitMethod = 'proportional' | 'flat';
       border-color: rgba(245, 158, 11, 0.3) !important;
     }
     
-    .summary-card { margin-top: 20px; }
+    .share-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-bottom: 16px;
+    }
+    .summary-card { margin-bottom: 24px; }
+    .share-capture {
+      padding: 20px 16px 16px;
+      background: var(--surface-color);
+      color: var(--text-primary);
+    }
+    .share-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding-bottom: 14px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .share-kicker {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.5;
+      margin-bottom: 4px;
+    }
+    .share-stores { font-weight: 700; font-size: 1.05rem; line-height: 1.35; }
+    .share-date { font-size: 0.8rem; opacity: 0.5; white-space: nowrap; padding-top: 2px; }
+    .share-totals {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+    .share-total-row {
+      display: flex;
+      justify-content: space-between;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.9rem;
+    }
+    .share-total-row span:last-child { font-weight: 700; }
+    .order-list-capture { display: block; }
     .summary-grid { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
     .summary-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; transition: background 0.15s; }
     .summary-item:hover { background: var(--surface-alt); }
@@ -849,6 +932,8 @@ type SplitMethod = 'proportional' | 'flat';
 })
 export class UberEatsSettlementComponent {
   private snackBar = inject(MatSnackBar);
+  private readonly summaryCapture = viewChild<ElementRef<HTMLElement>>('summaryCapture');
+  private readonly orderListCapture = viewChild<ElementRef<HTMLElement>>('orderListCapture');
 
   rawJson = '';
   parseError = signal('');
@@ -857,6 +942,7 @@ export class UberEatsSettlementComponent {
   parsedOrders = signal<ParsedOrderSummary[]>([]);
   orderItems = signal<OrderItem[]>([]);
   viewMode = signal<'table' | 'card'>('table');
+  capturing = signal<'idle' | 'summary' | 'list'>('idle');
   productSettings = signal<Record<string, ProductSetting>>({});
 
   readonly _jsonTotal = computed(() => {
@@ -891,6 +977,14 @@ export class UberEatsSettlementComponent {
       }
     });
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  });
+
+  readonly shareMeta = computed(() => {
+    const stores = this.parsedOrders().map(o => o.storeName).filter(Boolean);
+    return {
+      stores: stores.length ? stores.join(' · ') : 'Uber Eats',
+      date: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }),
+    };
   });
 
   readonly showBalanceWarning = computed(
@@ -1201,6 +1295,57 @@ export class UberEatsSettlementComponent {
     a.click();
     URL.revokeObjectURL(url);
     this.snackBar.open('CSV 已下載', '', { duration: 2000 });
+  }
+
+  copySummaryText(): void {
+    const meta = this.shareMeta();
+    const stats = this.stats();
+    const lines = [
+      'Uber Eats 對帳',
+      meta.stores,
+      meta.date,
+      '',
+      ...this.buyerSummary().map((entry) =>
+        `${entry.storeName}｜${entry.buyer}  ${entry.itemCount}件  ${this.fmt(entry.total)}`,
+      ),
+      '',
+      `對帳總和  ${this.fmt(stats.checkSum)}`,
+      `Uber 實付  ${this.fmt(stats.jsonTotal)}`,
+    ];
+    void navigator.clipboard.writeText(lines.join('\n')).then(
+      () => this.snackBar.open('已複製對帳文字', '', { duration: 2000 }),
+      () => this.snackBar.open('複製失敗，請改用截圖', '', { duration: 2500 }),
+    );
+  }
+
+  async captureSummary(): Promise<void> {
+    await this.captureBlock(this.summaryCapture()?.nativeElement, 'summary', 'uber-eats-小計');
+  }
+
+  async captureOrderList(): Promise<void> {
+    await this.captureBlock(this.orderListCapture()?.nativeElement, 'list', 'uber-eats-明細');
+  }
+
+  private async captureBlock(
+    element: HTMLElement | undefined,
+    mode: 'summary' | 'list',
+    filenamePrefix: string,
+  ): Promise<void> {
+    if (!element) {
+      this.snackBar.open('找不到可截圖的區塊', '', { duration: 2000 });
+      return;
+    }
+    this.capturing.set(mode);
+    try {
+      const { dataUrl, blob } = await elementToPng(element);
+      downloadPng(dataUrl, stampFilename(filenamePrefix));
+      const copied = await copyPngToClipboard(blob).catch(() => false);
+      this.snackBar.open(copied ? '已下載並複製圖片' : '圖片已下載', '', { duration: 2500 });
+    } catch {
+      this.snackBar.open('截圖失敗，請再試一次或改用複製文字', '', { duration: 3000 });
+    } finally {
+      this.capturing.set('idle');
+    }
   }
 
   clearAll(): void {
