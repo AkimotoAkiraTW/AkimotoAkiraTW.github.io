@@ -4,8 +4,6 @@ import {
   computed,
   inject,
   ChangeDetectionStrategy,
-  viewChild,
-  ElementRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,21 +15,20 @@ import {
   UiTextareaFieldComponent,
   UiTextFieldComponent,
 } from '../../../shared/components/form-primitives';
+import { CapturePanelComponent } from '../../../shared/components/capture-panel/capture-panel.component';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { ToolLayoutComponent } from '../tool-layout.component';
 import {
+  allocateUnspecifiedNet,
   detectProductSettings,
+  emptyProductSetting,
+  formatPercentOffLabel,
   parseOrderLineItem,
+  type CustomizationOption,
   type ProductSetting,
 } from './uber-eats-settlement.logic';
-import {
-  copyPngToClipboard,
-  downloadPng,
-  elementToPng,
-  stampFilename,
-} from './capture-element';
 
 // ─── 資料模型 ───────────────────────────────────────────────────────────────
 
@@ -43,6 +40,8 @@ interface OrderItem {
   price: number;
   /** 從 subtitle 解析出的加料/加大總費用 */
   customizationPrice: number;
+  /** 少糖、無糖、微冰、珍珠等加項（發飲料用） */
+  customizations: CustomizationOption[];
   /** API 已計算的折扣（如買一送一的顯式折扣） */
   explicitDiscount: number;
   /** 計算後的應付金額 */
@@ -82,11 +81,12 @@ type SplitMethod = 'proportional' | 'flat';
     MatChipsModule,
     MatSnackBarModule,
     ToolLayoutComponent,
+    CapturePanelComponent,
   ],
   template: `
     <app-tool-layout 
       title="Uber Eats 團購對帳工具" 
-      description="貼入訂單 JSON，自動計算各成員應付金額，支援公平折扣平攤與差價隔離。">
+      description="貼入 getActiveOrdersV1 JSON。品項用劃線後的折後價；外送費／服務費／會員折這支 API 沒有拆項，會用實付減餐點小計當成雜費淨額分攤。">
       
       <div class="tool-page-content">
         <!-- JSON 輸入面板 -->
@@ -95,7 +95,8 @@ type SplitMethod = 'proportional' | 'flat';
             <mat-icon mat-card-avatar>upload_file</mat-icon>
             <mat-card-title>貼入訂單 JSON</mat-card-title>
             <mat-card-subtitle>
-              從瀏覽器開發者工具 Network 頁籤找到 <code>getActiveOrdersV1</code> 請求，複製 Response 內容貼入。
+              從開發者工具 Network 找到 <code>getActiveOrdersV1</code>，複製 Response。
+              收據上的外送費、服務費、會員獎勵不會出現在這份 JSON。
             </mat-card-subtitle>
           </mat-card-header>
           <mat-card-content class="tool-form-shell">
@@ -144,31 +145,24 @@ type SplitMethod = 'proportional' | 'flat';
         @if (orderItems().length > 0) {
           <!-- 店家資訊 & 狀態 -->
           <div class="store-header">
-            <div class="header-actions">
-              <div class="store-items">
-                @for (order of parsedOrders(); track order.uuid) {
-                  <div class="store-item">
-                    <span class="store-name">{{ order.storeName }}</span>
-                    @if (order.status) {
-                      <mat-chip [disableRipple]="true">{{ order.status }}</mat-chip>
-                    }
-                  </div>
-                }
-              </div>
-              
-              <div class="view-toggle">
-                <button mat-icon-button [color]="viewMode() === 'table' ? 'primary' : ''" (click)="viewMode.set('table')" matTooltip="表格模式">
-                  <mat-icon>table_rows</mat-icon>
-                </button>
-                <button mat-icon-button [color]="viewMode() === 'card' ? 'primary' : ''" (click)="viewMode.set('card')" matTooltip="卡片模式">
-                  <mat-icon>grid_view</mat-icon>
-                </button>
-              </div>
+            <div class="store-items">
+              @for (order of parsedOrders(); track order.uuid) {
+                <div class="store-item">
+                  <span class="store-name">{{ order.storeName }}</span>
+                  @if (order.status) {
+                    <mat-chip [disableRipple]="true">{{ order.status }}</mat-chip>
+                  }
+                </div>
+              }
             </div>
           </div>
 
           <!-- 分攤設定 -->
           <mat-card appearance="outlined" class="config-card">
+            <mat-card-header>
+              <mat-card-title>分攤與折扣</mat-card-title>
+              <mat-card-subtitle>先調全單折扣、雜費與分攤方式，再到明細覆寫買一送一／贈品。</mat-card-subtitle>
+            </mat-card-header>
             <mat-card-content class="tool-form-shell">
               <div class="config-row">
                 <ui-text-field
@@ -195,116 +189,30 @@ type SplitMethod = 'proportional' | 'flat';
                   <mat-option value="flat">按人頭平攤</mat-option>
                 </ui-select-field>
               </div>
+              <p class="config-hint">
+                雜費淨額 = Uber 實付 − 餐點小計（外送、服務費、外送折扣、會員獎勵加總後的結果，無法再拆）。
+              </p>
             </mat-card-content>
           </mat-card>
 
 
 
-          <!-- 數據統計 -->
-          <div class="stats-row">
-            <div class="stat-card accent">
-              <span class="stat-label">Uber 實付總額</span>
-              <span class="stat-value positive">{{ fmt(stats().jsonTotal) }}</span>
-            </div>
-            <div class="stat-card" [class.warn]="stats().discrepancy !== 0">
-              <span class="stat-label" matTooltip="Uber 實付總額 - 當前對帳總和。差距不為零代表有未分配的折扣或費用">差距（未分配）</span>
-              <span class="stat-value" [class.negative]="stats().discrepancy < 0" [class.positive-warn]="stats().discrepancy > 0">
-                {{ fmt(stats().discrepancy) }}
-              </span>
-            </div>
-            <div class="stat-card highlight">
-              <span class="stat-label">當前對帳總和</span>
-              <span class="stat-value primary">{{ fmt(stats().checkSum) }}</span>
-            </div>
-          </div>
-
-          <!-- 餘額警告 + 智慧平攤 -->
-          @if (showBalanceWarning()) {
-            <div class="balance-warning">
-              <mat-icon>warning_amber</mat-icon>
-              <span>
-                對帳總和 ({{ fmt(stats().checkSum) }}) 與 Uber 實付 ({{ fmt(stats().jsonTotal) }}) 差了
-                <strong>{{ fmt(Math.abs(stats().discrepancy)) }}</strong>，
-                @if (stats().discrepancy < 0) { 可能有未輸入的折扣（例如平台買一送一）。 }
-                @else { 可能有未輸入的運費或服務費。 }
-              </span>
-              <button mat-stroked-button class="smart-btn" (click)="smartDistribute()"
-                matTooltip="將差距金額直接加入全單折扣/運費，使對帳總和與 Uber 實付吻合">
-                <mat-icon>auto_fix_high</mat-icon> 智慧平攤
-              </button>
-            </div>
-          }
-
-          <div class="share-toolbar no-capture">
-            <button
-              mat-stroked-button
-              (click)="captureSummary()"
-              [disabled]="capturing() !== 'idle'"
-              matTooltip="將每人小計區塊轉成圖片，並嘗試複製到剪貼簿">
-              <mat-icon>{{ capturing() === 'summary' ? 'hourglass_top' : 'photo_camera' }}</mat-icon>
-              截圖小計
-            </button>
-            <button
-              mat-stroked-button
-              (click)="copySummaryText()"
-              matTooltip="複製每人應付文字，方便貼到 LINE">
-              <mat-icon>content_copy</mat-icon>
-              複製文字
-            </button>
-            <button
-              mat-stroked-button
-              (click)="captureOrderList()"
-              [disabled]="capturing() !== 'idle'"
-              matTooltip="將訂單明細轉成圖片（不含覆寫按鈕）">
-              <mat-icon>{{ capturing() === 'list' ? 'hourglass_top' : 'image' }}</mat-icon>
-              截圖明細
-            </button>
-            <button mat-stroked-button (click)="exportCsv()">
-              <mat-icon>download</mat-icon>
-              匯出 CSV
-            </button>
-          </div>
-
-          <mat-card appearance="outlined" class="summary-card">
-            <div #summaryCapture class="share-capture">
-              <div class="share-meta">
-                <div>
-                  <div class="share-kicker">Uber Eats 對帳</div>
-                  <div class="share-stores">{{ shareMeta().stores }}</div>
-                </div>
-                <time class="share-date">{{ shareMeta().date }}</time>
+          <!-- 訂單明細：先設定 BOGO / 贈品，再看小計 -->
+          <mat-card appearance="outlined" class="table-card">
+            <app-capture-panel title="訂單明細" filenamePrefix="uber-eats-明細">
+              <div extra class="view-toggle">
+                <button type="button" mat-icon-button [color]="viewMode() === 'table' ? 'primary' : ''" (click)="viewMode.set('table')" matTooltip="表格模式">
+                  <mat-icon>table_rows</mat-icon>
+                </button>
+                <button type="button" mat-icon-button [color]="viewMode() === 'card' ? 'primary' : ''" (click)="viewMode.set('card')" matTooltip="卡片模式">
+                  <mat-icon>grid_view</mat-icon>
+                </button>
+                <button type="button" mat-stroked-button (click)="exportCsv()">
+                  <mat-icon>table_view</mat-icon>
+                  匯出 CSV
+                </button>
               </div>
-              <div class="summary-grid">
-                @for (entry of buyerSummary(); track entry.buyer + entry.storeName) {
-                  <div class="summary-item">
-                    <div class="summary-buyer">
-                      <span class="summary-store">{{ entry.storeName }}</span>
-                      <span class="summary-name">{{ entry.buyer }}</span>
-                    </div>
-                    <div class="summary-right">
-                      <span class="summary-items">{{ entry.itemCount }} 件</span>
-                      <span class="summary-amount">{{ fmt(entry.total) }}</span>
-                    </div>
-                  </div>
-                }
-              </div>
-              <div class="share-totals">
-                <div class="share-total-row">
-                  <span>對帳總和</span>
-                  <span>{{ fmt(stats().checkSum) }}</span>
-                </div>
-                <div class="share-total-row">
-                  <span>Uber 實付</span>
-                  <span>{{ fmt(stats().jsonTotal) }}</span>
-                </div>
-              </div>
-            </div>
-          </mat-card>
-
-          <!-- 訂單明細表 -->
-          <div #orderListCapture class="order-list-capture">
           @if (viewMode() === 'table') {
-            <mat-card appearance="outlined" class="table-card">
               <mat-card-content>
                 <div class="table-wrapper">
                   <table class="order-table">
@@ -336,19 +244,34 @@ type SplitMethod = 'proportional' | 'flat';
                                 @if (productSettings()[item.itemName]?.isGift) {
                                   <span class="badge badge-gift">贈品 GIFT</span>
                                 }
+                                @if (percentOffLabel(item.itemName); as percentLabel) {
+                                  <span class="badge badge-percent">{{ percentLabel }}</span>
+                                }
                                 @if (item.explicitDiscount > 0) {
                                   <span class="discount-chip"
-                                    matTooltip="Uber 系統在此品項上已套用折扣（如買一送一、百分比折扣），應付金額已反映此折扣">
+                                    matTooltip="收據劃線後少付的金額。應付已用折後價，無需再扣一次">
                                     已扣 {{ fmt(item.explicitDiscount) }}
                                   </span>
                                 }
                               </div>
+                              @if (item.customizations?.length) {
+                                <div class="addon-list">
+                                  @for (addon of item.customizations; track addon.label + addon.kind) {
+                                    <span class="addon-chip" [attr.data-kind]="addon.kind">
+                                      {{ addon.label }}
+                                      @if (addon.price > 0) {
+                                        <span class="addon-price">{{ fmt(addon.price) }}</span>
+                                      }
+                                    </span>
+                                  }
+                                </div>
+                              }
                               <div class="product-toggles no-capture">
                                 <span class="toggle-label">覆寫屬性:</span>
                                 <button 
                                   type="button"
                                   class="badge-toggle-btn bogo-toggle"
-                                  [class.active]="productSettings()[item.itemName]?.isBogo"
+                                  [class.active]="isManualToggle(item.itemName, 'isBogo')"
                                   (click)="toggleProductSetting(item.itemName, 'isBogo')"
                                   matTooltip="手動設定此品項為買一送一 (BOGO)，折扣將由所有購買者公平分攤底價">
                                   <mat-icon class="toggle-icon">local_offer</mat-icon> 買一送一
@@ -356,13 +279,13 @@ type SplitMethod = 'proportional' | 'flat';
                                 <button 
                                   type="button"
                                   class="badge-toggle-btn gift-toggle"
-                                  [class.active]="productSettings()[item.itemName]?.isGift"
+                                  [class.active]="isManualToggle(item.itemName, 'isGift')"
                                   (click)="toggleProductSetting(item.itemName, 'isGift')"
                                   matTooltip="手動設定此品項為滿額贈品 (GIFT)，原價/底價全免，僅需支付加項費">
                                   <mat-icon class="toggle-icon">redeem</mat-icon> 贈品
                                 </button>
 
-                                @if (productSettings()[item.itemName]?.isBogo) {
+                                @if (isManualToggle(item.itemName, 'isBogo')) {
                                   <div class="limit-wrapper">
                                     <span class="limit-label">限額:</span>
                                     <input 
@@ -401,7 +324,6 @@ type SplitMethod = 'proportional' | 'flat';
                   </table>
                 </div>
               </mat-card-content>
-            </mat-card>
           } @else {
             <!-- 卡片模式 -->
             <div class="card-grid">
@@ -424,15 +346,30 @@ type SplitMethod = 'proportional' | 'flat';
                         @if (productSettings()[item.itemName]?.isGift) {
                           <span class="badge badge-gift">贈品 GIFT</span>
                         }
+                        @if (percentOffLabel(item.itemName); as percentLabel) {
+                          <span class="badge badge-percent">{{ percentLabel }}</span>
+                        }
                         @if (item.explicitDiscount > 0) {
                           <span class="discount-chip">已扣 {{ fmt(item.explicitDiscount) }}</span>
                         }
                       </div>
+                      @if (item.customizations?.length) {
+                        <div class="addon-list">
+                          @for (addon of item.customizations; track addon.label + addon.kind) {
+                            <span class="addon-chip" [attr.data-kind]="addon.kind">
+                              {{ addon.label }}
+                              @if (addon.price > 0) {
+                                <span class="addon-price">{{ fmt(addon.price) }}</span>
+                              }
+                            </span>
+                          }
+                        </div>
+                      }
                       <div class="product-toggles card-toggles no-capture">
                         <button 
                           type="button"
                           class="badge-toggle-btn bogo-toggle"
-                          [class.active]="productSettings()[item.itemName]?.isBogo"
+                          [class.active]="isManualToggle(item.itemName, 'isBogo')"
                           (click)="toggleProductSetting(item.itemName, 'isBogo')"
                           matTooltip="手動設定此品項為買一送一 (BOGO)">
                           <mat-icon class="toggle-icon">local_offer</mat-icon> BOGO
@@ -440,13 +377,13 @@ type SplitMethod = 'proportional' | 'flat';
                         <button 
                           type="button"
                           class="badge-toggle-btn gift-toggle"
-                          [class.active]="productSettings()[item.itemName]?.isGift"
+                          [class.active]="isManualToggle(item.itemName, 'isGift')"
                           (click)="toggleProductSetting(item.itemName, 'isGift')"
                           matTooltip="手動設定此品項為滿額贈品 (GIFT)">
                           <mat-icon class="toggle-icon">redeem</mat-icon> 贈品
                         </button>
 
-                        @if (productSettings()[item.itemName]?.isBogo) {
+                        @if (isManualToggle(item.itemName, 'isBogo')) {
                           <div class="limit-wrapper">
                             <span class="limit-label">限額:</span>
                             <input 
@@ -486,7 +423,96 @@ type SplitMethod = 'proportional' | 'flat';
               }
             </div>
           }
+            </app-capture-panel>
+          </mat-card>
+
+          <!-- 總結算：確認明細後再看每人應付 -->
+          <div class="stats-row">
+            <div class="stat-card">
+              <span class="stat-label" matTooltip="各品項劃線後應付加總，對應收據的餐點小計">餐點小計</span>
+              <span class="stat-value">{{ fmt(foodSubtotal()) }}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label" matTooltip="實付減餐點小計。正數是淨費用，負數是淨折扣">雜費淨額</span>
+              <span class="stat-value" [class.negative]="netExtras() < 0" [class.positive]="netExtras() > 0">
+                {{ fmt(netExtras()) }}
+              </span>
+            </div>
+            <div class="stat-card accent">
+              <span class="stat-label">Uber 實付總額</span>
+              <span class="stat-value positive">{{ fmt(stats().jsonTotal) }}</span>
+            </div>
+            <div class="stat-card highlight">
+              <span class="stat-label">當前對帳總和</span>
+              <span class="stat-value primary">{{ fmt(stats().checkSum) }}</span>
+            </div>
           </div>
+
+          @if (showBalanceWarning()) {
+            <div class="balance-warning">
+              <mat-icon>warning_amber</mat-icon>
+              <span>
+                對帳總和 ({{ fmt(stats().checkSum) }}) 與 Uber 實付 ({{ fmt(stats().jsonTotal) }}) 差了
+                <strong>{{ fmt(Math.abs(stats().discrepancy)) }}</strong>。
+                JSON 沒有外送／服務／會員明細，可用智慧平攤把差額當雜費淨額。
+              </span>
+              <button mat-stroked-button class="smart-btn" (click)="smartDistribute()"
+                matTooltip="將差距金額直接加入全單折扣/運費，使對帳總和與 Uber 實付吻合">
+                <mat-icon>auto_fix_high</mat-icon> 智慧平攤
+              </button>
+            </div>
+          }
+
+          <mat-card appearance="outlined" class="summary-card">
+            <app-capture-panel title="每人小計" filenamePrefix="uber-eats-小計">
+              <button extra type="button" mat-stroked-button (click)="copySummaryText()"
+                matTooltip="複製每人應付文字，方便貼到 LINE">
+                <mat-icon>content_copy</mat-icon>
+                複製文字
+              </button>
+              <div class="share-capture">
+                <div class="share-meta">
+                  <div>
+                    <div class="share-kicker">Uber Eats 對帳</div>
+                    <div class="share-stores">{{ shareMeta().stores }}</div>
+                  </div>
+                  <time class="share-date">{{ shareMeta().date }}</time>
+                </div>
+                <div class="summary-grid">
+                  @for (entry of buyerSummary(); track entry.buyer + entry.storeName) {
+                    <div class="summary-item">
+                      <div class="summary-buyer">
+                        <span class="summary-store">{{ entry.storeName }}</span>
+                        <span class="summary-name">{{ entry.buyer }}</span>
+                      </div>
+                      <div class="summary-right">
+                        <span class="summary-items">{{ entry.itemCount }} 件</span>
+                        <span class="summary-amount">{{ fmt(entry.total) }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+                <div class="share-totals">
+                  <div class="share-total-row">
+                    <span>餐點小計</span>
+                    <span>{{ fmt(foodSubtotal()) }}</span>
+                  </div>
+                  <div class="share-total-row">
+                    <span>雜費淨額</span>
+                    <span>{{ fmt(netExtras()) }}</span>
+                  </div>
+                  <div class="share-total-row">
+                    <span>對帳總和</span>
+                    <span>{{ fmt(stats().checkSum) }}</span>
+                  </div>
+                  <div class="share-total-row">
+                    <span>Uber 實付</span>
+                    <span>{{ fmt(stats().jsonTotal) }}</span>
+                  </div>
+                </div>
+              </div>
+            </app-capture-panel>
+          </mat-card>
         }
       </div>
     </app-tool-layout>
@@ -514,10 +540,10 @@ type SplitMethod = 'proportional' | 'flat';
     }
  
     .store-header { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-    .header-actions { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
     .store-items { display: flex; flex-direction: column; gap: 8px; }
     .store-item { display: flex; align-items: center; gap: 12px; }
     .store-name { font-size: 1.25rem; font-weight: 700; color: color-mix(in srgb, currentColor 80%, transparent); }
+    .view-toggle { display: flex; align-items: center; gap: 4px; }
     .config-card { margin-bottom: 20px; }
     .config-row {
       display: flex;
@@ -527,7 +553,12 @@ type SplitMethod = 'proportional' | 'flat';
       padding-top: 8px;
     }
     .config-field { flex: 1 1 180px; min-width: 160px; }
-    .config-field { flex: 1; min-width: 160px; }
+    .config-hint {
+      margin: 4px 0 0;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      opacity: 0.55;
+    }
     
     /* Stats Row & Cards Modern Glassmorphic Styling */
     .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 24px; }
@@ -595,13 +626,6 @@ type SplitMethod = 'proportional' | 'flat';
       border-color: rgba(245, 158, 11, 0.3) !important;
     }
     
-    .share-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
-      margin-bottom: 16px;
-    }
     .summary-card { margin-bottom: 24px; }
     .share-capture {
       padding: 20px 16px 16px;
@@ -641,7 +665,6 @@ type SplitMethod = 'proportional' | 'flat';
       font-size: 0.9rem;
     }
     .share-total-row span:last-child { font-weight: 700; }
-    .order-list-capture { display: block; }
     .summary-grid { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
     .summary-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; transition: background 0.15s; }
     .summary-item:hover { background: var(--surface-alt); }
@@ -654,6 +677,12 @@ type SplitMethod = 'proportional' | 'flat';
     
     .table-card { margin-bottom: 24px; }
     .table-wrapper { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+    .is-capturing .table-wrapper { overflow: visible; }
+    .is-capturing .inline-input {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
     
     /* Elegant Clean Table Styles */
     .order-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 600px; }
@@ -671,7 +700,7 @@ type SplitMethod = 'proportional' | 'flat';
       padding: 16px; 
       border-bottom: 1px solid var(--border-color); 
       color: var(--text-primary);
-      vertical-align: middle;
+      vertical-align: top;
     }
     .center { text-align: center; }
     .right { text-align: right; font-variant-numeric: tabular-nums; }
@@ -745,11 +774,62 @@ type SplitMethod = 'proportional' | 'flat';
     
     .payable { font-weight: 700; color: var(--accent-color); font-size: 0.95rem; }
     .item-name-group { display: flex; flex-direction: column; gap: 2px; }
+    .addon-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 2px 0 4px;
+    }
+    .addon-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      line-height: 1.2;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: color-mix(in srgb, currentColor 6%, var(--surface-alt, transparent));
+      color: var(--text-primary);
+    }
+    .addon-chip[data-kind="sugar"] {
+      background: color-mix(in srgb, #f59e0b 14%, var(--surface-color));
+      border-color: color-mix(in srgb, #f59e0b 35%, var(--border-color));
+      color: #b45309;
+    }
+    .addon-chip[data-kind="ice"] {
+      background: color-mix(in srgb, #38bdf8 14%, var(--surface-color));
+      border-color: color-mix(in srgb, #38bdf8 35%, var(--border-color));
+      color: #0369a1;
+    }
+    .addon-chip[data-kind="size"] {
+      opacity: 0.9;
+    }
+    .addon-chip[data-kind="topping"] {
+      background: color-mix(in srgb, #34d399 12%, var(--surface-color));
+      border-color: color-mix(in srgb, #34d399 30%, var(--border-color));
+      color: #047857;
+    }
+    :host-context(html.dark-theme) .addon-chip[data-kind="sugar"] {
+      color: #fbbf24;
+    }
+    :host-context(html.dark-theme) .addon-chip[data-kind="ice"] {
+      color: #7dd3fc;
+    }
+    :host-context(html.dark-theme) .addon-chip[data-kind="topping"] {
+      color: #6ee7b7;
+    }
+    .addon-price {
+      font-variant-numeric: tabular-nums;
+      opacity: 0.75;
+      font-weight: 500;
+    }
     .item-title { font-weight: 500; }
     .help-icon { font-size: 0.85em; opacity: 0.5; vertical-align: middle; }
  
     /* 卡片模式樣式 */
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin: 8px 16px 16px; }
     .item-card { border-radius: 12px; transition: transform 0.2s; border: 1px solid var(--border-color); }
     .item-card:hover { transform: translateY(-2px); }
     .item-card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
@@ -788,6 +868,16 @@ type SplitMethod = 'proportional' | 'flat';
       background: #f3e8fd; 
       color: #7627d3; 
       border: 1px solid rgba(139, 92, 246, 0.2); 
+    }
+    .badge-percent {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid rgba(14, 165, 233, 0.25);
+    }
+    :host-context(html.dark-theme) .badge-percent {
+      background: rgba(14, 165, 233, 0.15);
+      color: #7dd3fc;
+      border-color: rgba(14, 165, 233, 0.3);
     }
     :host-context(html.dark-theme) .badge-gift {
       background: rgba(139, 92, 246, 0.15); 
@@ -932,8 +1022,6 @@ type SplitMethod = 'proportional' | 'flat';
 })
 export class UberEatsSettlementComponent {
   private snackBar = inject(MatSnackBar);
-  private readonly summaryCapture = viewChild<ElementRef<HTMLElement>>('summaryCapture');
-  private readonly orderListCapture = viewChild<ElementRef<HTMLElement>>('orderListCapture');
 
   rawJson = '';
   parseError = signal('');
@@ -942,8 +1030,18 @@ export class UberEatsSettlementComponent {
   parsedOrders = signal<ParsedOrderSummary[]>([]);
   orderItems = signal<OrderItem[]>([]);
   viewMode = signal<'table' | 'card'>('table');
-  capturing = signal<'idle' | 'summary' | 'list'>('idle');
   productSettings = signal<Record<string, ProductSetting>>({});
+  foodSubtotal = signal(0);
+
+  percentOffLabel(itemName: string): string {
+    const ratio = this.productSettings()[itemName]?.percentOff;
+    return ratio ? formatPercentOffLabel(ratio) : '';
+  }
+
+  isManualToggle(itemName: string, field: 'isBogo' | 'isGift'): boolean {
+    const setting = this.productSettings()[itemName];
+    return !!setting && setting.source === 'manual' && setting[field];
+  }
 
   readonly _jsonTotal = computed(() => {
     return this.parsedOrders().reduce((sum, o) => sum + o.jsonTotal, 0);
@@ -952,6 +1050,12 @@ export class UberEatsSettlementComponent {
   globalDiscount = 0;
   deliveryFee = 0;
   splitMethod: SplitMethod = 'proportional';
+
+  readonly netExtras = computed(() => {
+    this.orderItems();
+    this.foodSubtotal();
+    return Math.round((this.deliveryFee - this.globalDiscount) * 100) / 100;
+  });
 
   readonly stats = computed(() => {
     const items = this.orderItems();
@@ -1109,10 +1213,12 @@ export class UberEatsSettlementComponent {
         this.performAutoDetection(mergedItems);
         this.orderItems.set(mergedItems);
       } else {
+        this.productSettings.set({});
         this.parsedOrders.set(allNewOrderSummaries);
         this.performAutoDetection(allNewItems);
         this.orderItems.set(allNewItems);
       }
+      this.applyUnspecifiedNetFromJson();
       this.recalculate();
     } catch (err) {
       console.error('Data Processing Error:', err);
@@ -1142,12 +1248,24 @@ export class UberEatsSettlementComponent {
 
   toggleProductSetting(itemName: string, field: 'isBogo' | 'isGift'): void {
     const settings = { ...this.productSettings() };
-    const current = settings[itemName] || { isBogo: false, isGift: false, bogoLimit: null };
-    if (field === 'isBogo') {
-      settings[itemName] = { isBogo: !current.isBogo, isGift: false, bogoLimit: current.bogoLimit };
-    } else {
-      settings[itemName] = { isBogo: false, isGift: !current.isGift, bogoLimit: null };
+    const current = settings[itemName] || emptyProductSetting();
+    const turningOffManual = current.source === 'manual' && current[field];
+
+    if (turningOffManual) {
+      delete settings[itemName];
+      this.productSettings.set(settings);
+      this.performAutoDetection(this.orderItems());
+      this.recalculate();
+      return;
     }
+
+    settings[itemName] = {
+      ...current,
+      isBogo: field === 'isBogo',
+      isGift: field === 'isGift',
+      bogoLimit: field === 'isBogo' ? current.bogoLimit : null,
+      source: 'manual',
+    };
     this.productSettings.set(settings);
     this.recalculate();
   }
@@ -1155,10 +1273,22 @@ export class UberEatsSettlementComponent {
   updateBogoLimit(itemName: string, limit: any): void {
     const settings = { ...this.productSettings() };
     if (settings[itemName]) {
-      settings[itemName].bogoLimit = limit !== '' && limit !== null ? Math.max(1, Number(limit) || 1) : null;
+      settings[itemName] = {
+        ...settings[itemName],
+        bogoLimit: limit !== '' && limit !== null ? Math.max(1, Number(limit) || 1) : null,
+        source: 'manual',
+      };
       this.productSettings.set(settings);
       this.recalculate();
     }
+  }
+
+  /** JSON 沒有費用拆項：用實付 − 餐點折後小計帶入雜費淨額 */
+  private applyUnspecifiedNetFromJson(): void {
+    const food = this.orderItems().reduce((sum, item) => sum + (item.originalPayable || 0), 0);
+    const allocated = allocateUnspecifiedNet(this._jsonTotal(), food);
+    this.deliveryFee = allocated.deliveryFee;
+    this.globalDiscount = allocated.globalDiscount;
   }
 
   recalculate(): void {
@@ -1206,9 +1336,10 @@ export class UberEatsSettlementComponent {
     // 第一階段：計算 BOGO（含上限）與 Gift 折扣
     const phase1Items = items.map(item => {
       let itemBase = 0;
-      const setting = this.productSettings()[item.itemName] || { isBogo: false, isGift: false, bogoLimit: null };
+      const setting = this.productSettings()[item.itemName] || emptyProductSetting();
+      const applyOverride = setting.source === 'manual';
 
-      if (setting.isBogo) {
+      if (applyOverride && setting.isBogo) {
         const g = titleGroups[item.itemName];
         const totalQty = g.totalQty;
         
@@ -1221,10 +1352,10 @@ export class UberEatsSettlementComponent {
         const totalBogoDiscount = freeCups * g.maxUnitBase;
         const buyerDiscount = totalQty > 0 ? (item.quantity / totalQty) * totalBogoDiscount : 0;
         itemBase = item.price - buyerDiscount;
-      } else if (setting.isGift) {
+      } else if (applyOverride && setting.isGift) {
         itemBase = item.customizationPrice; // 贈品底價免除，僅付加料費
       } else {
-        itemBase = item.originalPayable; // 一般品項
+        itemBase = item.originalPayable; // JSON 折後價（收據劃線後數字）
       }
 
       if (itemBase < 0) itemBase = 0;
@@ -1232,14 +1363,10 @@ export class UberEatsSettlementComponent {
       return { originalRef: item, computedItemBase: itemBase };
     });
 
-    // 計算已被系統套用的特惠折扣總和
-    const preAppliedDiscountsSum = phase1Items.reduce((sum, { originalRef, computedItemBase }) => {
-      return sum + (originalRef.price - computedItemBase);
-    }, 0);
+    this.foodSubtotal.set(Math.round(globalBasePoolTotal * 100) / 100);
 
-    // 剩餘的全域折扣進行全域分攤
-    const remainingGlobalDiscount = Math.max(0, discount - preAppliedDiscountsSum);
-    const netAdjustment = fee - remainingGlobalDiscount;
+    // 品項折扣已含在 computedItemBase；globalDiscount / deliveryFee 只分攤 JSON 沒拆的雜費淨額
+    const netAdjustment = fee - discount;
 
     // 第二階段：分配全域淨調整額 (netAdjustment)
     const updated = phase1Items.map(({ originalRef, computedItemBase }) => {
@@ -1275,12 +1402,17 @@ export class UberEatsSettlementComponent {
     const stats = this.stats();
     // 每人小計
     const summary = this.buyerSummary();
-    let csv = '\uFEFF店家,訂購人,品項,數量,原價,加項,應付金額\n';
+    let csv = '\uFEFF店家,訂購人,品項,加項,數量,原價,加項費,應付金額\n';
     items.forEach(item => {
-      csv += `${item.storeName},${item.buyer},"${item.itemName}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.finalPayable.toFixed(2)}\n`;
+      const addons = (item.customizations ?? [])
+        .map((addon) => addon.price > 0 ? `${addon.label} ${addon.price}` : addon.label)
+        .join('、')
+        .replace(/"/g, '""');
+      const itemName = item.itemName.replace(/"/g, '""');
+      csv += `${item.storeName},${item.buyer},"${itemName}","${addons}",${item.quantity},${item.price.toFixed(2)},${item.customizationPrice.toFixed(2)},${item.finalPayable.toFixed(2)}\n`;
     });
-    csv += `\n對帳總和,,,,,,${stats.checkSum.toFixed(2)}\n`;
-    csv += `Uber 實付,,,,,,${stats.jsonTotal.toFixed(2)}\n`;
+    csv += `\n對帳總和,,,,,,,${stats.checkSum.toFixed(2)}\n`;
+    csv += `Uber 實付,,,,,,,${stats.jsonTotal.toFixed(2)}\n`;
     csv += `\n=== 每人小計 ===\n店家,姓名,件數,應付\n`;
     summary.forEach(s => {
       csv += `${s.storeName},${s.buyer},${s.itemCount},${s.total.toFixed(2)}\n`;
@@ -1309,6 +1441,8 @@ export class UberEatsSettlementComponent {
         `${entry.storeName}｜${entry.buyer}  ${entry.itemCount}件  ${this.fmt(entry.total)}`,
       ),
       '',
+      `餐點小計  ${this.fmt(this.foodSubtotal())}`,
+      `雜費淨額  ${this.fmt(this.netExtras())}`,
       `對帳總和  ${this.fmt(stats.checkSum)}`,
       `Uber 實付  ${this.fmt(stats.jsonTotal)}`,
     ];
@@ -1316,36 +1450,6 @@ export class UberEatsSettlementComponent {
       () => this.snackBar.open('已複製對帳文字', '', { duration: 2000 }),
       () => this.snackBar.open('複製失敗，請改用截圖', '', { duration: 2500 }),
     );
-  }
-
-  async captureSummary(): Promise<void> {
-    await this.captureBlock(this.summaryCapture()?.nativeElement, 'summary', 'uber-eats-小計');
-  }
-
-  async captureOrderList(): Promise<void> {
-    await this.captureBlock(this.orderListCapture()?.nativeElement, 'list', 'uber-eats-明細');
-  }
-
-  private async captureBlock(
-    element: HTMLElement | undefined,
-    mode: 'summary' | 'list',
-    filenamePrefix: string,
-  ): Promise<void> {
-    if (!element) {
-      this.snackBar.open('找不到可截圖的區塊', '', { duration: 2000 });
-      return;
-    }
-    this.capturing.set(mode);
-    try {
-      const { dataUrl, blob } = await elementToPng(element);
-      downloadPng(dataUrl, stampFilename(filenamePrefix));
-      const copied = await copyPngToClipboard(blob).catch(() => false);
-      this.snackBar.open(copied ? '已下載並複製圖片' : '圖片已下載', '', { duration: 2500 });
-    } catch {
-      this.snackBar.open('截圖失敗，請再試一次或改用複製文字', '', { duration: 3000 });
-    } finally {
-      this.capturing.set('idle');
-    }
   }
 
   clearAll(): void {
@@ -1356,6 +1460,8 @@ export class UberEatsSettlementComponent {
     this.globalDiscount = 0;
     this.deliveryFee = 0;
     this.splitMethod = 'proportional';
+    this.productSettings.set({});
+    this.foodSubtotal.set(0);
   }
 
   fmt(value: number): string {
