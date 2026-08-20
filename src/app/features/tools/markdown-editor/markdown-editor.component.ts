@@ -417,7 +417,7 @@ export class MarkdownEditorComponent {
     return {
       startOnLoad: false,
       securityLevel: 'strict' as const,
-      theme: this.themeService.theme() === 'dark' ? 'dark' : 'neutral',
+      theme: this.themeService.theme() === 'dark' ? 'dark' as const : 'neutral' as const,
       fontFamily: 'inherit',
     };
   }
