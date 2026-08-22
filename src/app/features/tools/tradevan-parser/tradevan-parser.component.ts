@@ -25,7 +25,7 @@ import { TradevanParserService, TradevanRecord } from './tradevan-parser.service
   ],
   template: `
 <app-tool-layout
-  title="關貿 CSV 解析工具"
+  heading="關貿 CSV 解析工具"
   description="上傳電子發票加值中心下載的 CSV 檔，自動依法規計算 B2C 整期逆算稅額，一鍵產出法定申報期總表。">
 
   <div class="tool-content">

@@ -85,7 +85,7 @@ type SplitMethod = 'proportional' | 'flat';
   ],
   template: `
     <app-tool-layout 
-      title="Uber Eats 團購對帳工具" 
+      heading="Uber Eats 團購對帳工具" 
       description="貼入 getActiveOrdersV1 JSON。品項用劃線後的折後價；外送費／服務費／會員折這支 API 沒有拆項，會用實付減餐點小計當成雜費淨額分攤。">
       
       <div class="tool-page-content">

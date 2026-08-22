@@ -78,7 +78,7 @@ interface SmsData {
   ],
   template: `
     <app-tool-layout
-      title="條碼與 QR Code 產生器"
+      heading="條碼與 QR Code 產生器"
       description="即時產生 QR Code、Data Matrix、PDF417 等各式條碼，支援漸層色彩、Logo 置入與向量下載。"
       [fullWidth]="true">
 

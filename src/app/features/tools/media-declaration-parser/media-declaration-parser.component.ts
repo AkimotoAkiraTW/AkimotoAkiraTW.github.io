@@ -28,7 +28,7 @@ const PAGE_SIZE = 50;
   ],
   template: `
 <app-tool-layout
-  title="媒體申報檔解析工具"
+  heading="媒體申報檔解析工具"
   description="上傳國稅局格式的 TXT 申報檔，自動依法規計算 B2C 整期逆算稅額與 B2B 逐筆稅額，支援特種稅率分群彙總。">
 
   <div class="tool-content">

@@ -52,7 +52,7 @@ const HTML5QR_CDN = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
   ],
   template: `
     <app-tool-layout
-      title="條碼掃描器"
+      heading="條碼掃描器"
       description="取代 PDA 掃描機，用鏡頭連續掃描 QR Code、Data Matrix 等二維條碼，支援數量登錄與 CSV 匯出。"
       [fullWidth]="true">
 

@@ -87,6 +87,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/tools/combination-calculator/combination-calculator.component').then(m => m.CombinationCalculatorComponent),
   },
   {
+    path: 'tools/ff14-glamour',
+    title: 'FF14 搭配附圖 | KC',
+    loadComponent: () => import('./features/tools/ff14-glamour/ff14-glamour.component').then(m => m.Ff14GlamourComponent),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

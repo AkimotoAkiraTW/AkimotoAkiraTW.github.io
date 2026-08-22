@@ -38,7 +38,7 @@ import {
   ],
   template: `
     <app-tool-layout
-      title="排列組合計算器"
+      heading="排列組合計算器"
       description="設定號碼區間與 N 取 K 參數，以 DFS 回溯演算法生成所有組合，內建 OOM 防護與 URL 壓縮分享機制。"
     >
       <div class="tool-card-container">

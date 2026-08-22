@@ -70,10 +70,13 @@ interface NavItem {
         <footer class="app-footer">
           <div class="footer-inner">
             <div class="footer-copyright">
-              © 2016–2026 <strong>{{ cfg.displayName }}</strong>. All rights reserved.
+              © 2016–{{ cfg.copyrightYear }} <strong>{{ cfg.displayName }}</strong>
             </div>
             <div class="footer-meta">
-              MIT License · Powered by Angular & KC Toolkit
+              本站程式採
+              <a [href]="licenseUrl" target="_blank" rel="noopener noreferrer">MIT License</a>
+              （不含第三方素材）
+              · Powered by Angular &amp; KC Toolkit
             </div>
           </div>
         </footer>
@@ -104,10 +107,12 @@ interface NavItem {
     .footer-copyright { font-weight: 400; color: var(--text-secondary); }
     .footer-copyright strong { font-weight: 600; color: var(--text-primary); }
     .footer-meta { font-family: 'Inter', system-ui, sans-serif; opacity: 0.8; font-size: 12px; }
+    .footer-meta a { color: var(--accent-color); }
   `],
 })
 export class LayoutComponent {
   readonly cfg = SITE_CONFIG;
+  readonly licenseUrl = `https://github.com/${SITE_CONFIG.githubUsername}/${SITE_CONFIG.githubUsername}.github.io/blob/main/LICENSE`;
   themeService = inject(ThemeService);
   private router = inject(Router);
   private breakpointObserver = inject(BreakpointObserver);

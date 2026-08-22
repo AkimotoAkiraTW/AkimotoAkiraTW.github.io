@@ -86,5 +86,13 @@
     "icon": "calculate",
     "route": "combination-calculator",
     "category": "life"
+  },
+  {
+    "id": "ff14-glamour",
+    "name": "FF14 搭配附圖",
+    "description": "上傳角色截圖，搜武器／防具／飾品並附染色，拖進圖裡後匯出疊圖。",
+    "icon": "checkroom",
+    "route": "ff14-glamour",
+    "category": "life"
   }
 ]

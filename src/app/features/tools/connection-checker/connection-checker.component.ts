@@ -54,7 +54,7 @@ interface EndpointCard {
   ],
   template: `
     <app-tool-layout 
-      title="Connection Checker" 
+      heading="Connection Checker" 
       description="監控多個端點的連線狀態，失敗時發送桌面通知。">
       
       <div class="tool-actions-bar">

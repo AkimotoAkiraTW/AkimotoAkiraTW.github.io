@@ -18,6 +18,7 @@
 9. **條碼掃描器**：用手機或電腦鏡頭連續掃描 QR Code、Data Matrix 等二維條碼，支援數量登錄、防誤掃冷卻與 CSV 匯出，可取代 PDA 掃描機。
 10. **離線 CRM 客戶管理**：具備原生校驗與 Fluent IndexedDB 查詢引擎的離線首選 CRM 快取資料庫，支援欄位過濾與軟刪除機制。
 11. **排列組合計算器**：設定號碼區間與 N 取 K 參數，以 DFS 回溯演算法生成所有組合，內建 OOM 防護與 URL 壓縮分享機制。
+12. **FF14 搭配附圖**：上傳角色截圖，搜武器／防具／飾品並附染色，拖進圖裡後匯出疊圖。
 
 ## 📦 內容與維護
 
@@ -48,7 +49,9 @@ npm run build                  # 內含 content，再 Angular 建置
 
 ## 📄 授權聲明
 
-本專案採用 [MIT License](LICENSE) 授權，歡迎學習參考。
+本專案程式碼採用 [MIT License](LICENSE) 授權，歡迎學習參考。
+
+**FINAL FANTASY XIV** 的名稱、圖示、截圖、裝備與染料等遊戲著作物屬 Square Enix，**不在 MIT 範圍內**。搭配附圖工具依官方 [著作物利用條件](https://support.jp.square-enix.com/rule.php?id=5381&la=0)／[Materials Usage License](https://support.na.square-enix.com/rule.php?id=5382) 標示 `© SQUARE ENIX`；裝備查詢經由社群 [XIVAPI](https://v2.xivapi.com/)，該 API 本身為開源服務，遊戲資料著作權仍屬 Square Enix。本站非官方、與 Square Enix 無關。
 
 ---
 © 2026 KC. Built with ☕ and Code.

@@ -581,3 +581,20 @@ ui-date-field {
     max-width: calc(100vw - 24px) !important;
   }
 }
+
+.cdk-overlay-container {
+  z-index: 2000;
+}
+
+.glamour-help-tip {
+  white-space: pre-line;
+  max-width: 280px !important;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Official FFXIV Fan Kit tooltip is appended to document.body */
+#eorzeadb_tooltip {
+  overflow: visible !important;
+  z-index: 10000;
+}

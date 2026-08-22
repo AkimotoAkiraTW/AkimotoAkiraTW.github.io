@@ -47,7 +47,7 @@ function loadMermaid(): Promise<MermaidApi> {
   ],
   template: `
     <app-tool-layout
-      title="智慧編輯器"
+      heading="智慧編輯器"
       description="本機 Markdown 筆記本。預覽與 Mermaid 圖都在瀏覽器運算，內容只存在這台裝置。"
       [fullWidth]="true">
 

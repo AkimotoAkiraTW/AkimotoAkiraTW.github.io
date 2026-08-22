@@ -23,7 +23,7 @@ import { ToolLayoutComponent } from '../tool-layout.component';
   ],
   template: `
     <app-tool-layout 
-      title="數字轉中文大寫" 
+      heading="數字轉中文大寫" 
       description="報帳與出差費用的好幫手，將阿拉伯數字轉換為國字大寫金額。">
       
       <div class="tool-card-container">

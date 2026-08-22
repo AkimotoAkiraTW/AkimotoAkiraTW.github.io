@@ -25,7 +25,7 @@ import { JsonNodeComponent } from './json-node.component';
   ],
   template: `
     <app-tool-layout 
-      title="JSON 結構化工具" 
+      heading="JSON 結構化工具" 
       description="不僅是格式化，更提供樹狀導覽與型別高亮，輕鬆解析複雜資料結構。"
       [fullWidth]="true">
       
